@@ -44,4 +44,5 @@ uv.lock
 
 # Teaching materials (instructor only)
 TEACHING_GUIDE.md
-docs/
+docs/DESIGN_THINKING_GUIDE.md
+docs/EDUCATIONAL_REVIEW.md
