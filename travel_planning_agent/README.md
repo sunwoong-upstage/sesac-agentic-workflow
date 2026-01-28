@@ -151,14 +151,19 @@ travel_planning_agent/
 ├── uv.lock               # 의존성 잠금
 ├── README.md             # 이 문서
 ├── main.py               # 실행 진입점
-└── agent/
-    ├── __init__.py       # 패키지 초기화 및 공개 API
-    ├── state.py          # 상태 정의 (TypedDict, Pydantic)
-    ├── prompts.py        # 시스템 프롬프트 (Plan-and-Solve 포함)
-    ├── tools.py          # 도구 정의 (RAG, 날씨, 관광지, 예산)
-    ├── nodes.py          # 노드 함수들 (핵심 로직)
-    └── graph.py          # 워크플로우 그래프 구성
+├── agent/
+│   ├── __init__.py       # 패키지 초기화 및 공개 API
+│   ├── state.py          # 상태 정의 (TypedDict, Pydantic)
+│   ├── prompts.py        # 시스템 프롬프트 (Plan-and-Solve 포함)
+│   ├── tools.py          # 도구 정의 (RAG, 예산, 웹 검색)
+│   ├── nodes.py          # 노드 함수들 (핵심 로직)
+│   └── graph.py          # 워크플로우 그래프 구성
+└── tests/                # (선택) 검증용 테스트 스크립트
+    ├── test_edge_cases.py   # 도구 및 엣지 케이스 검증
+    └── test_multiturn.py    # 다중 턴 대화 검증
 ```
+
+> **참고**: `tests/` 폴더는 코드 검증용으로 선택적입니다. 교육 과정에서 다루지 않으며, 실행 없이 학습 가능합니다.
 
 ---
 
