@@ -6,9 +6,7 @@
 
 ```
 sesac-agentic-workflow/
-├── Practice01-09 notebooks/     # 학습 노트북
-├── travel_planning_agent/        # ⭐ 메인 프로젝트: 여행 계획 AI 에이전트
-├── simple_agent_project/         # 간단한 에이전트 예제
+├── travel_planning_agent/        # 메인 프로젝트: 여행 계획 AI 에이전트
 └── README.md                     # 이 문서
 ```
 
@@ -71,25 +69,3 @@ uv run python main.py
 uv python install 3.11
 uv venv --python 3.11
 ```
-
-## 학습 노트북
-
-- `Practice01-ai-service-agent.ipynb` - AI 서비스 에이전트 기초
-- `Practice02-agentic-workflow.ipynb` - 에이전틱 워크플로우 
-- `Practice03-tool-calling.ipynb` - 도구 호출
-- `Practice04-mcp.ipynb` - MCP (Model Context Protocol)
-- `Practice05-rag-agentic-rag.ipynb` - RAG 및 Agentic RAG
-- `Practice06-memory-management.ipynb` - 메모리 관리
-- `Practice07-context-engineering.ipynb` - 컨텍스트 엔지니어링
-- `Practice08-safety-guardrails.ipynb` - 안전성 및 가드레일
-- `Practice09-evaluation.ipynb` - 평가
-
-## 요구사항
-
-- Python 3.11+
-- uv 패키지 매니저
-- Upstage API Key
-
-## 라이선스
-
-MIT
