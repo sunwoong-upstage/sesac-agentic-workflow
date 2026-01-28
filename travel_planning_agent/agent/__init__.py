@@ -26,6 +26,7 @@ from agent.state import (
     IntentClassification,
     TravelPlan,
     QualityEvaluation,
+    ExtractedPreferences,
 )
 from agent.graph import (
     create_travel_planning_graph,
@@ -45,6 +46,7 @@ __all__ = [
     "IntentClassification",
     "TravelPlan",
     "QualityEvaluation",
+    "ExtractedPreferences",
     # Graph
     "create_travel_planning_graph",
     "run_travel_planning",

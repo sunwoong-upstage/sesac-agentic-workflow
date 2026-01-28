@@ -24,6 +24,7 @@ from agent.state import (
     IntentClassification,
     TravelPlan,
     QualityEvaluation,
+    ExtractedPreferences,
 )
 from agent.prompts import (
     INTENT_CLASSIFICATION_PROMPT,
@@ -133,7 +134,80 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 2. Plan-and-Solve 노드 (핵심 기법 - Plan 단계)
+# 2. 선호도 추출 노드 (다중 턴 대화 지원)
+#
+# 대화 히스토리 전체를 분석하여 사용자가 언급한 여행 선호도를 추출합니다.
+# 이전 턴에서 추출된 정보와 새로운 정보를 병합하여 누적합니다.
+# =============================================================================
+
+def extract_preferences_node(state: TravelPlanningState) -> dict:
+    """
+    대화 히스토리에서 여행 선호도를 추출합니다.
+    
+    다중 턴 대화를 지원하기 위해:
+    - state["messages"]의 전체 대화 내용을 LLM에 전달
+    - 언급된 정보만 추출 (언급 안 된 정보는 None)
+    - 이전에 추출된 정보와 병합
+    
+    Args:
+        state: 현재 상태 (messages 포함)
+    
+    Returns:
+        업데이트된 extracted_preferences
+    """
+    llm = ChatUpstage(model="solar-pro2", temperature=0.0)
+    structured_llm = llm.with_structured_output(ExtractedPreferences)
+    
+    # 전체 대화 히스토리 가져오기
+    messages = state.get("messages", [])
+    if not messages:
+        return {"extracted_preferences": {}}
+    
+    # 추출 프롬프트
+    extraction_prompt = """당신은 대화에서 여행 선호도를 추출하는 전문가입니다.
+
+아래 대화 내용을 분석하여 사용자가 **명시적으로 언급한** 여행 정보만 추출하세요.
+
+추출 규칙:
+1. 명확히 언급된 정보만 추출합니다.
+2. 추론이나 가정을 하지 마세요.
+3. 언급되지 않은 정보는 None으로 유지합니다.
+4. 이전 대화와 최신 대화를 모두 고려하여 누적 정보를 파악합니다.
+
+예시:
+- "도쿄 가고 싶어" → destination: "도쿄"
+- "예산 30만원" → budget: 300000
+- "2박3일" → duration_days: 3
+- "가족 4명이서" → companions: 4
+
+대화 내용을 분석하여 추출하세요."""
+    
+    try:
+        result: ExtractedPreferences = structured_llm.invoke([
+            SystemMessage(content=extraction_prompt),
+            *messages  # 전체 대화 히스토리 전달
+        ])
+        
+        # 기존 선호도와 병합 (새로운 정보가 우선)
+        current_prefs = state.get("extracted_preferences", {})
+        new_prefs = result.model_dump(exclude_none=True)  # None 값은 제외
+        
+        merged_prefs = {**current_prefs, **new_prefs}
+        
+        return {
+            "extracted_preferences": merged_prefs,
+            "messages": [AIMessage(content=f"[선호도 추출] {list(new_prefs.keys())} 정보 갱신")],
+        }
+        
+    except Exception as e:
+        return {
+            "extracted_preferences": state.get("extracted_preferences", {}),
+            "error_log": [f"선호도 추출 실패: {e}"],
+        }
+
+
+# =============================================================================
+# 3. Plan-and-Solve 노드 (핵심 기법 - Plan 단계)
 #
 # Plan-and-Solve 프롬프팅 기법:
 # 복잡한 문제를 "계획 수립 → 단계별 실행 → 결과 종합"으로 나누어 해결합니다.
@@ -165,18 +239,23 @@ def plan_node(state: TravelPlanningState) -> dict:
     query = state.get("user_input", "")
     intent = state.get("intent", "general_travel")
     user_profile = state.get("user_profile", {})
+    preferences = state.get("extracted_preferences", {})
+
+    # 추출된 선호도 정보를 프롬프트에 포함
+    prefs_text = "없음"
+    if preferences:
+        prefs_text = ", ".join(f"{k}: {v}" for k, v in preferences.items() if v is not None)
 
     prompt = PLAN_AND_SOLVE_PROMPT.format(
         query=query,
         intent=intent,
-        user_profile=user_profile if user_profile else "프로필 없음 (첫 방문)",
+        user_profile=f"선호도: {prefs_text}\n프로필: {user_profile if user_profile else '첫 방문'}",
     )
 
     try:
-        plan: TravelPlan = structured_llm.invoke([
-            SystemMessage(content=prompt),
-            HumanMessage(content=query)
-        ])
+        # 전체 대화 히스토리를 포함하여 LLM에 전달
+        messages = [SystemMessage(content=prompt)] + state.get("messages", [])
+        plan: TravelPlan = structured_llm.invoke(messages)
         plan_text = f"{plan.destination} {plan.duration_days}일 여행 계획"
         return {
             "travel_plan": plan_text,
@@ -196,7 +275,7 @@ def plan_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 3. 조사 노드 (Plan-and-Solve - Solve 단계)
+# 4. 조사 노드 (Plan-and-Solve - Solve 단계)
 # =============================================================================
 
 def research_node(state: TravelPlanningState) -> dict:
@@ -205,6 +284,8 @@ def research_node(state: TravelPlanningState) -> dict:
 
     plan_node에서 생성된 plan_steps를 읽어
     필요한 도구를 호출하고 정보를 수집합니다.
+    
+    extracted_preferences를 활용하여 적절한 도구를 호출합니다.
 
     Args:
         state: 현재 상태
@@ -217,11 +298,16 @@ def research_node(state: TravelPlanningState) -> dict:
     plan_steps = state.get("plan_steps", [])
     query = state.get("user_input", "")
     intent = state.get("intent", "general_travel")
+    preferences = state.get("extracted_preferences", {})
     tool_results = []
 
-    # plan_steps를 프롬프트에 포함하여 LLM에게 도구 호출 요청
+    # plan_steps와 추출된 선호도를 프롬프트에 포함
     from agent.tools import BUDGET_DB
     budget_destinations = ", ".join(BUDGET_DB.keys())
+    
+    prefs_text = "없음"
+    if preferences:
+        prefs_text = "\n".join(f"  - {k}: {v}" for k, v in preferences.items() if v is not None)
     
     prompt = RESEARCH_PROMPT.format(
         query=query,
@@ -229,11 +315,12 @@ def research_node(state: TravelPlanningState) -> dict:
         intent=intent,
         budget_destinations=budget_destinations,
     )
+    
+    prompt += f"\n\n### 추출된 사용자 선호도\n{prefs_text}\n\n도구 호출 시 이 정보를 활용하세요."
 
-    response = llm_with_tools.invoke([
-        SystemMessage(content=prompt),
-        HumanMessage(content=query)
-    ])
+    # 전체 대화 히스토리를 포함
+    messages = [SystemMessage(content=prompt)] + state.get("messages", [])
+    response = llm_with_tools.invoke(messages)
 
     # LLM이 반환한 tool_calls 실행
     if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -266,7 +353,7 @@ def research_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 4. 종합 응답 노드 (Plan-and-Solve - Synthesize 단계)
+# 5. 종합 응답 노드 (Plan-and-Solve - Synthesize 단계)
 # =============================================================================
 
 def synthesize_node(state: TravelPlanningState) -> dict:
@@ -305,7 +392,7 @@ def synthesize_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 5. 응답 품질 평가 노드 (Evaluator-Optimizer 패턴)
+# 6. 응답 품질 평가 노드 (Evaluator-Optimizer 패턴)
 # =============================================================================
 
 def evaluate_response_node(state: TravelPlanningState) -> dict:
@@ -356,7 +443,7 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 6. 응답 개선 노드
+# 7. 응답 개선 노드
 # =============================================================================
 
 def improve_response_node(state: TravelPlanningState) -> dict:
@@ -394,7 +481,7 @@ def improve_response_node(state: TravelPlanningState) -> dict:
 
 
 # =============================================================================
-# 7. 메모리 저장 노드 (이중 메모리 시스템)
+# 8. 메모리 저장 노드 (이중 메모리 시스템)
 #
 # 이중 메모리 설계:
 #

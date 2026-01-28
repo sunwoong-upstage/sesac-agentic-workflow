@@ -100,6 +100,15 @@ class TravelPlanningState(TypedDict):
     """최대 반복 횟수"""
 
     # =========================================================================
+    # 대화에서 추출된 선호도 (다중 턴 지원)
+    # =========================================================================
+    extracted_preferences: dict
+    """
+    대화 히스토리에서 추출한 구조화된 선호도
+    예: {"destination": "도쿄", "budget": 300000, "duration_days": 3}
+    """
+
+    # =========================================================================
     # 장기 메모리 (사용자 프로필)
     # =========================================================================
     user_profile: dict
@@ -174,6 +183,38 @@ class QualityEvaluation(BaseModel):
     )
 
 
+class ExtractedPreferences(BaseModel):
+    """
+    대화에서 추출한 여행 선호도 스키마
+    
+    다중 턴 대화에서 사용자가 언급한 정보를 누적 추출합니다.
+    각 필드는 Optional이며, 언급되지 않은 정보는 None으로 유지됩니다.
+    """
+    destination: str | None = Field(
+        default=None,
+        description="여행지 (예: '제주도', '도쿄', '파리'). 언급되지 않으면 None"
+    )
+    duration_days: int | None = Field(
+        default=None,
+        description="여행 기간 (일수). 예: 2박3일 → 3. 언급되지 않으면 None",
+        ge=1
+    )
+    budget: int | None = Field(
+        default=None,
+        description="예산 (원화). 예: 30만원 → 300000. 언급되지 않으면 None",
+        ge=0
+    )
+    travel_style: str | None = Field(
+        default=None,
+        description="여행 스타일 (예: 'budget', 'moderate', 'luxury'). 언급되지 않으면 None"
+    )
+    companions: int | None = Field(
+        default=None,
+        description="동행자 수 (본인 포함). 예: 혼자 → 1, 가족 4명 → 4. 언급되지 않으면 None",
+        ge=1
+    )
+
+
 # =============================================================================
 # 상태 초기화 헬퍼
 # =============================================================================
@@ -216,6 +257,8 @@ def create_initial_state(
         # 루프 제어
         "iteration": 0,
         "max_iterations": max_iterations,
+        # 추출된 선호도
+        "extracted_preferences": {},
         # 장기 메모리
         "user_profile": {},
         # 파이프라인 제어

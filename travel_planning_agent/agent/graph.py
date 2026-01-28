@@ -10,6 +10,8 @@
 │     ↓                                                           │
 │   [classify_intent] ─── 문의 유형 분류                          │
 │     ↓ (skip_to_end?)                                           │
+│   [extract_preferences] ─── 대화에서 선호도 추출 (다중 턴)       │
+│     ↓                                                           │
 │   [plan] ─── Plan 단계: 실행 계획 수립                          │
 │     ↓                                                           │
 │   [research] ─── Solve 단계: 도구 호출로 정보 수집              │
@@ -40,6 +42,7 @@ from typing import Literal
 from agent.state import TravelPlanningState, create_initial_state
 from agent.nodes import (
     classify_intent_node,
+    extract_preferences_node,
     plan_node,
     research_node,
     synthesize_node,
@@ -57,11 +60,12 @@ def create_travel_planning_graph(with_memory: bool = True):
 
     이 그래프는 Plan-and-Solve 파이프라인을 구현합니다:
     1. 의도 분류
-    2. Plan: 실행 계획 수립
-    3. Solve: 도구 호출로 정보 수집
-    4. Synthesize: 결과 종합하여 응답 생성
-    5. 응답 품질 평가 및 개선 루프
-    6. 이중 메모리 저장
+    2. 선호도 추출 (다중 턴 대화 지원)
+    3. Plan: 실행 계획 수립
+    4. Solve: 도구 호출로 정보 수집
+    5. Synthesize: 결과 종합하여 응답 생성
+    6. 응답 품질 평가 및 개선 루프
+    7. 이중 메모리 저장
 
     Args:
         with_memory: 메모리(체크포인터) 사용 여부
@@ -88,6 +92,7 @@ def create_travel_planning_graph(with_memory: bool = True):
 
     # Plan-and-Solve 파이프라인 노드
     builder.add_node("classify_intent", classify_intent_node)
+    builder.add_node("extract_preferences", extract_preferences_node)
     builder.add_node("plan", plan_node)
     builder.add_node("research", research_node)
     builder.add_node("synthesize", synthesize_node)
@@ -110,10 +115,11 @@ def create_travel_planning_graph(with_memory: bool = True):
     builder.add_conditional_edges(
         "classify_intent",
         lambda s: "skip" if s.get("skip_to_end") else "continue",
-        {"continue": "plan", "skip": "save_memory"}
+        {"continue": "extract_preferences", "skip": "save_memory"}
     )
 
     # Plan-and-Solve 파이프라인 (선형)
+    builder.add_edge("extract_preferences", "plan")
     builder.add_edge("plan", "research")
     builder.add_edge("research", "synthesize")
 
