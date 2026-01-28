@@ -5,53 +5,53 @@
 
 ---
 
-## 📚 전체 구조 개요
+## 전체 구조 개요
 
 ```
 travel_planning_agent/
-├── main.py              # ⭐ 실행 진입점 (데모 시작)
+├── main.py              # 실행 진입점 (데모 시작)
 └── agent/
     ├── __init__.py      # 패키지 초기화 및 공개 API
-    ├── state.py         # ⭐ 1단계: 상태 정의 (TypedDict, Pydantic)
-    ├── prompts.py       # ⭐ 2단계: 프롬프트 엔지니어링
-    ├── tools.py         # ⭐ 3단계: 도구 정의 (RAG, 예산, 웹 검색)
-    ├── nodes.py         # ⭐ 4단계: 노드 함수 (핵심 로직)
-    └── graph.py         # ⭐ 5단계: 워크플로우 그래프 구성
+    ├── state.py         # 1단계: 상태 정의 (TypedDict, Pydantic)
+    ├── prompts.py       # 2단계: 프롬프트 엔지니어링
+    ├── tools.py         # 3단계: 도구 정의 (RAG, 예산, 웹 검색)
+    ├── nodes.py         # 4단계: 노드 함수 (핵심 로직)
+    └── graph.py         # 5단계: 워크플로우 그래프 구성
 ```
 
 ---
 
-## 🎯 교육 진행 순서 (권장)
+## 교육 진행 순서 (권장)
 
 ### **1일차: 기초 - 상태와 프롬프트**
-- ✅ `state.py`: 상태 관리의 개념
-- ✅ `prompts.py`: 프롬프트 엔지니어링 기초
+- `state.py`: 상태 관리의 개념
+- `prompts.py`: 프롬프트 엔지니어링 기초
 
 ### **2일차: 도구와 RAG**
-- ✅ `tools.py`: Tool Calling, RAG (FAISS), 웹 검색 API
+- `tools.py`: Tool Calling, RAG (FAISS), 웹 검색 API
 
 ### **3일차: 노드와 워크플로우**
-- ✅ `nodes.py`: Plan-and-Solve, Evaluator-Optimizer 패턴
-- ✅ `graph.py`: LangGraph 워크플로우, 이중 메모리
+- `nodes.py`: Plan-and-Solve, Evaluator-Optimizer 패턴
+- `graph.py`: LangGraph 워크플로우, 이중 메모리
 
 ### **4일차: 실습 및 실행**
-- ✅ `main.py`: 전체 실행 및 디버깅
-- ✅ 학생 프로젝트 시작
+- `main.py`: 전체 실행 및 디버깅
+- 학생 프로젝트 시작
 
 ---
 
-## 📖 모듈별 강의 가이드
+## 모듈별 강의 가이드
 
 ---
 
-## 1️⃣ `state.py` - 상태 정의 (40분)
+## 1. `state.py` - 상태 정의 (40분)
 
-### 🎓 학습 목표
+### 학습 목표
 - TypedDict를 사용한 상태 정의
 - Pydantic을 사용한 구조화된 출력(Structured Output)
 - `operator.add`를 활용한 상태 누적
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 1.1. `TravelPlanningState` (TypedDict)
 ```python
@@ -62,10 +62,10 @@ class TravelPlanningState(TypedDict):
 ```
 
 **강의 포인트:**
-- ✅ `TypedDict`: 딕셔너리 타입 힌트 (타입 안전성)
-- ✅ `Annotated[..., operator.add]`: 값을 누적하는 필드 (append)
-- ✅ `messages`: LangChain의 메시지 히스토리를 저장
-- ✅ `extracted_preferences`: 다중 턴 대화에서 사용자 정보 누적
+- `TypedDict`: 딕셔너리 타입 힌트 (타입 안전성)
+- `Annotated[..., operator.add]`: 값을 누적하는 필드 (append)
+- `messages`: LangChain의 메시지 히스토리를 저장
+- `extracted_preferences`: 다중 턴 대화에서 사용자 정보 누적
 
 **실습 질문:**
 > Q: `messages`는 왜 `operator.add`를 사용할까요?  
@@ -78,9 +78,9 @@ class IntentClassification(BaseModel):
 ```
 
 **강의 포인트:**
-- ✅ LLM이 JSON 대신 Pydantic 스키마로 출력하도록 강제
-- ✅ `Literal`: 특정 값 중 하나만 허용 (Enum과 유사)
-- ✅ `Field(description=...)`: LLM에게 각 필드의 의미 설명
+- LLM이 JSON 대신 Pydantic 스키마로 출력하도록 강제
+- `Literal`: 특정 값 중 하나만 허용 (Enum과 유사)
+- `Field(description=...)`: LLM에게 각 필드의 의미 설명
 
 **실습:**
 ```python
@@ -99,24 +99,24 @@ class ExtractedPreferences(BaseModel):
 ```
 
 **강의 포인트:**
-- ✅ 모든 필드가 `Optional` (`| None`)
-- ✅ 언급된 정보만 추출, 나머지는 `None`
-- ✅ 이전 턴과 병합하여 누적 (nodes.py에서 구현)
+- 모든 필드가 `Optional` (`| None`)
+- 언급된 정보만 추출, 나머지는 `None`
+- 이전 턴과 병합하여 누적 (nodes.py에서 구현)
 
-### 🧪 실습 과제
+### 실습 과제
 1. 새로운 필드 `travel_style: str` 추가해보기
 2. `ExtractedPreferences`에 `meal_preference: str | None` 추가
 
 ---
 
-## 2️⃣ `prompts.py` - 프롬프트 엔지니어링 (50분)
+## 2. `prompts.py` - 프롬프트 엔지니어링 (50분)
 
-### 🎓 학습 목표
+### 학습 목표
 - 역할(Role) 기반 프롬프트 작성
 - Plan-and-Solve 기법의 프롬프트 구조
 - 동적 프롬프트 포맷팅
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 2.1. 프롬프트 구조 패턴
 ```python
@@ -136,10 +136,10 @@ INTENT_CLASSIFICATION_PROMPT = """당신은 여행 문의 분류 전문가입니
 ```
 
 **강의 포인트:**
-- ✅ **역할(Role) 명시**: "당신은 ~전문가입니다"
-- ✅ **구체적 지시사항**: 카테고리 나열, 예시 제공
-- ✅ **출력 형식 명시**: (Pydantic 스키마가 자동 포맷 제공)
-- ✅ **동적 변수**: `{query}` → `.format(query=...)`로 삽입
+- **역할(Role) 명시**: "당신은 ~전문가입니다"
+- **구체적 지시사항**: 카테고리 나열, 예시 제공
+- **출력 형식 명시**: (Pydantic 스키마가 자동 포맷 제공)
+- **동적 변수**: `{query}` → `.format(query=...)`로 삽입
 
 #### 2.2. Plan-and-Solve 프롬프트 (핵심 기법)
 
@@ -161,9 +161,9 @@ PLAN_AND_SOLVE_PROMPT = """당신은 여행 계획 전문가입니다.
 ```
 
 **강의 포인트:**
-- ✅ Plan-and-Solve는 **복잡한 문제를 작은 단계로 분해**
-- ✅ 참고 논문: "Plan-and-Solve Prompting" (Wang et al., 2023)
-- ✅ 각 프롬프트가 파이프라인의 특정 단계를 담당
+- Plan-and-Solve는 **복잡한 문제를 작은 단계로 분해**
+- 참고 논문: "Plan-and-Solve Prompting" (Wang et al., 2023)
+- 각 프롬프트가 파이프라인의 특정 단계를 담당
 
 #### 2.3. 동적 프롬프트 (예: RESEARCH_PROMPT)
 ```python
@@ -173,24 +173,24 @@ RESEARCH_PROMPT = """...
 ```
 
 **강의 포인트:**
-- ✅ `{budget_destinations}`는 런타임에 `BUDGET_DB.keys()` 값으로 대체
-- ✅ 하드코딩 대신 데이터 참조 → 유지보수성 향상
+- `{budget_destinations}`는 런타임에 `BUDGET_DB.keys()` 값으로 대체
+- 하드코딩 대신 데이터 참조 → 유지보수성 향상
 
-### 🧪 실습 과제
+### 실습 과제
 1. 새로운 프롬프트 작성: "여행지 날씨 추천 전문가"
 2. 프롬프트에 예시(Few-shot) 추가해보기
 
 ---
 
-## 3️⃣ `tools.py` - 도구 정의 (60분)
+## 3. `tools.py` - 도구 정의 (60분)
 
-### 🎓 학습 목표
+### 학습 목표
 - `@tool` 데코레이터를 사용한 도구 정의
 - FAISS 벡터 스토어 기반 RAG 구현
 - 외부 API (Serper) 연동
 - 에러 핸들링 및 폴백 전략
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 3.1. 도구 정의 기본 구조
 ```python
@@ -205,10 +205,10 @@ def estimate_budget(destination: str, duration_days: int) -> str:
 ```
 
 **강의 포인트:**
-- ✅ `@tool`: LangChain 도구로 등록
-- ✅ `args_schema`: 입력 검증 (Pydantic)
-- ✅ Docstring: LLM이 도구 사용법을 이해하는 데 사용
-- ✅ 반환값은 항상 `str` (LLM이 읽을 수 있는 텍스트)
+- `@tool`: LangChain 도구로 등록
+- `args_schema`: 입력 검증 (Pydantic)
+- Docstring: LLM이 도구 사용법을 이해하는 데 사용
+- 반환값은 항상 `str` (LLM이 읽을 수 있는 텍스트)
 
 #### 3.2. RAG - FAISS 벡터 검색
 ```python
@@ -223,10 +223,10 @@ def _get_or_initialize_vector_store():
 ```
 
 **강의 포인트:**
-- ✅ **Lazy Initialization**: 첫 사용 시에만 초기화 (API 비용 절감)
-- ✅ **Embedding**: 텍스트 → 벡터로 변환 (Upstage Embeddings)
-- ✅ **FAISS**: 벡터 유사도 검색 (Facebook AI Similarity Search)
-- ✅ **Fallback**: FAISS 실패 시 키워드 검색으로 대체
+- **Lazy Initialization**: 첫 사용 시에만 초기화 (API 비용 절감)
+- **Embedding**: 텍스트 → 벡터로 변환 (Upstage Embeddings)
+- **FAISS**: 벡터 유사도 검색 (Facebook AI Similarity Search)
+- **Fallback**: FAISS 실패 시 키워드 검색으로 대체
 
 #### 3.3. 폴백 검색 전략
 ```python
@@ -239,9 +239,9 @@ def _keyword_fallback_search(query: str) -> str:
 ```
 
 **강의 포인트:**
-- ✅ API 실패, 임베딩 오류 등 예외 상황 대비
-- ✅ 완전 실패보다는 낮은 품질이라도 결과 제공
-- ✅ 방어적 프로그래밍(Defensive Programming)
+- API 실패, 임베딩 오류 등 예외 상황 대비
+- 완전 실패보다는 낮은 품질이라도 결과 제공
+- 방어적 프로그래밍(Defensive Programming)
 
 #### 3.4. 웹 검색 (Serper API)
 ```python
@@ -253,25 +253,25 @@ def web_search(query: str) -> str:
 ```
 
 **강의 포인트:**
-- ✅ **Serper API**: Google 검색 결과를 JSON으로 제공
-- ✅ `timeout=10`: 네트워크 오류 대비
-- ✅ `try/except`: 모든 예외 상황 처리 → 항상 문자열 반환
+- **Serper API**: Google 검색 결과를 JSON으로 제공
+- `timeout=10`: 네트워크 오류 대비
+- `try/except`: 모든 예외 상황 처리 → 항상 문자열 반환
 
-### 🧪 실습 과제
+### 실습 과제
 1. 새로운 도구 추가: `get_weather(city: str) -> str`
 2. Mock 데이터로 날씨 정보 반환 구현
 
 ---
 
-## 4️⃣ `nodes.py` - 노드 함수 (90분)
+## 4. `nodes.py` - 노드 함수 (90분)
 
-### 🎓 학습 목표
+### 학습 목표
 - LangGraph 노드의 개념과 역할
 - Plan-and-Solve 파이프라인 구현
 - Evaluator-Optimizer 패턴
 - 이중 메모리 시스템 (단기/장기)
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 4.1. 노드 함수 기본 구조
 ```python
@@ -289,10 +289,10 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
 ```
 
 **강의 포인트:**
-- ✅ **노드**: 상태를 입력받아 부분 업데이트 딕셔너리 반환
-- ✅ `state` 읽기 → 처리 → 반환값이 상태에 병합
-- ✅ `.with_structured_output()`: Pydantic 스키마 강제
-- ✅ `temperature=0.0`: 결정론적 출력 (분류 작업)
+- **노드**: 상태를 입력받아 부분 업데이트 딕셔너리 반환
+- `state` 읽기 → 처리 → 반환값이 상태에 병합
+- `.with_structured_output()`: Pydantic 스키마 강제
+- `temperature=0.0`: 결정론적 출력 (분류 작업)
 
 #### 4.2. 다중 턴 대화 - 선호도 추출
 ```python
@@ -308,9 +308,9 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
 ```
 
 **강의 포인트:**
-- ✅ `*messages`: 전체 대화 히스토리를 LLM에 전달
-- ✅ `exclude_none=True`: 언급되지 않은 정보는 제외
-- ✅ 딕셔너리 병합: 이전 정보 + 새 정보 누적
+- `*messages`: 전체 대화 히스토리를 LLM에 전달
+- `exclude_none=True`: 언급되지 않은 정보는 제외
+- 딕셔너리 병합: 이전 정보 + 새 정보 누적
 
 #### 4.3. Plan-and-Solve 노드들
 
@@ -349,9 +349,9 @@ def synthesize_node(state: TravelPlanningState) -> dict:
 ```
 
 **강의 포인트:**
-- ✅ Plan → Solve → Synthesize: 3단계 파이프라인
-- ✅ `plan_steps`가 research에서 도구 호출 결정에 사용됨
-- ✅ 모든 조사 결과를 synthesize에서 통합
+- Plan → Solve → Synthesize: 3단계 파이프라인
+- `plan_steps`가 research에서 도구 호출 결정에 사용됨
+- 모든 조사 결과를 synthesize에서 통합
 
 #### 4.4. Evaluator-Optimizer 패턴
 ```python
@@ -371,10 +371,10 @@ def should_improve_response(state) -> Literal["improve", "end"]:
 ```
 
 **강의 포인트:**
-- ✅ **Evaluator**: 응답 품질 평가 (1-10점)
-- ✅ **Optimizer**: 피드백 기반 응답 개선
-- ✅ 7점 미만 → 개선 → 재평가 (루프)
-- ✅ 최대 반복 횟수 제한 (무한 루프 방지)
+- **Evaluator**: 응답 품질 평가 (1-10점)
+- **Optimizer**: 피드백 기반 응답 개선
+- 7점 미만 → 개선 → 재평가 (루프)
+- 최대 반복 횟수 제한 (무한 루프 방지)
 
 #### 4.5. 이중 메모리 시스템
 ```python
@@ -386,25 +386,25 @@ def save_memory_node(state, config) -> dict:
 ```
 
 **강의 포인트:**
-- ✅ **단기 메모리**: MemorySaver (graph.py에서 설명)
-- ✅ **장기 메모리**: USER_PROFILES 딕셔너리
-- ✅ `user_id`로 사용자 선호도 누적
-- ✅ 프로세스 재시작 시 초기화 (프로덕션에서는 DB 사용)
+- **단기 메모리**: MemorySaver (graph.py에서 설명)
+- **장기 메모리**: USER_PROFILES 딕셔너리
+- `user_id`로 사용자 선호도 누적
+- 프로세스 재시작 시 초기화 (프로덕션에서는 DB 사용)
 
-### 🧪 실습 과제
+### 실습 과제
 1. 새로운 노드 추가: `recommend_hotels_node()`
 2. `evaluation_passed` 기준을 8점으로 변경해보기
 
 ---
 
-## 5️⃣ `graph.py` - 워크플로우 그래프 (60분)
+## 5. `graph.py` - 워크플로우 그래프 (60분)
 
-### 🎓 학습 목표
+### 학습 목표
 - LangGraph 워크플로우 구성
 - 조건부 라우팅 (Conditional Edges)
 - MemorySaver를 사용한 단기 메모리
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 5.1. 그래프 구조
 ```python
@@ -428,10 +428,10 @@ builder.add_conditional_edges(
 ```
 
 **강의 포인트:**
-- ✅ `StateGraph`: 상태 기반 그래프 정의
-- ✅ `add_node`: 노드 함수 등록
-- ✅ `add_edge`: 고정 경로 연결
-- ✅ `add_conditional_edges`: 조건부 분기 (if/else와 유사)
+- `StateGraph`: 상태 기반 그래프 정의
+- `add_node`: 노드 함수 등록
+- `add_edge`: 고정 경로 연결
+- `add_conditional_edges`: 조건부 분기 (if/else와 유사)
 
 #### 5.2. 워크플로우 다이어그램
 ```
@@ -457,9 +457,9 @@ END
 ```
 
 **강의 포인트:**
-- ✅ 선형 파이프라인 + 평가-개선 루프
-- ✅ `skip_to_end` 플래그로 빈 입력 건너뛰기
-- ✅ 각 노드는 독립적 → 모듈화
+- 선형 파이프라인 + 평가-개선 루프
+- `skip_to_end` 플래그로 빈 입력 건너뛰기
+- 각 노드는 독립적 → 모듈화
 
 #### 5.3. MemorySaver (단기 메모리)
 ```python
@@ -472,10 +472,10 @@ result = graph.invoke(initial_state, config)
 ```
 
 **강의 포인트:**
-- ✅ `thread_id`: 대화 세션 식별자
-- ✅ 같은 `thread_id`로 재호출 → 이전 대화 맥락 자동 복원
-- ✅ 체크포인터가 자동으로 상태 저장/복원
-- ✅ `messages` 필드가 누적되어 대화 히스토리 유지
+- `thread_id`: 대화 세션 식별자
+- 같은 `thread_id`로 재호출 → 이전 대화 맥락 자동 복원
+- 체크포인터가 자동으로 상태 저장/복원
+- `messages` 필드가 누적되어 대화 히스토리 유지
 
 #### 5.4. 실행 헬퍼 함수
 ```python
@@ -487,24 +487,24 @@ def run_travel_planning(query: str, thread_id: str, user_id: str):
 ```
 
 **강의 포인트:**
-- ✅ `thread_id`: 단기 메모리용 (대화 세션)
-- ✅ `user_id`: 장기 메모리용 (사용자 프로필)
-- ✅ 편의 함수로 복잡도 숨김
+- `thread_id`: 단기 메모리용 (대화 세션)
+- `user_id`: 장기 메모리용 (사용자 프로필)
+- 편의 함수로 복잡도 숨김
 
-### 🧪 실습 과제
+### 실습 과제
 1. 새로운 조건부 엣지 추가: `quality_score >= 9`이면 다른 경로
 2. 그래프 구조를 Mermaid로 시각화해보기
 
 ---
 
-## 6️⃣ `main.py` - 실행 스크립트 (30분)
+## 6. `main.py` - 실행 스크립트 (30분)
 
-### 🎓 학습 목표
+### 학습 목표
 - 전체 에이전트 실행 흐름
 - `graph.stream()`으로 노드별 진행 상황 확인
 - 단기/장기 메모리 시연
 
-### 📝 주요 개념
+### 주요 개념
 
 #### 6.1. 실행 흐름
 ```python
@@ -520,9 +520,9 @@ print(final_state.values.get("final_response"))
 ```
 
 **강의 포인트:**
-- ✅ `graph.stream()`: 각 노드 실행을 스트리밍
-- ✅ `graph.invoke()`: 최종 상태만 반환 (스트림 불필요 시)
-- ✅ `graph.get_state(config)`: 현재 저장된 상태 확인
+- `graph.stream()`: 각 노드 실행을 스트리밍
+- `graph.invoke()`: 최종 상태만 반환 (스트림 불필요 시)
+- `graph.get_state(config)`: 현재 저장된 상태 확인
 
 #### 6.2. 다중 쿼리 실행 (단기 메모리 시연)
 ```python
@@ -536,17 +536,17 @@ graph.stream(followup_state, config)  # 이전 대화 맥락 유지
 ```
 
 **강의 포인트:**
-- ✅ 같은 `thread_id` 사용 → MemorySaver가 대화 맥락 복원
-- ✅ "거기"가 "제주도"를 의미함을 LLM이 이해
-- ✅ 다중 턴 대화의 핵심
+- 같은 `thread_id` 사용 → MemorySaver가 대화 맥락 복원
+- "거기"가 "제주도"를 의미함을 LLM이 이해
+- 다중 턴 대화의 핵심
 
-### 🧪 실습 과제
+### 실습 과제
 1. 3번째 쿼리 추가: "예산은 얼마나 들까?"
 2. 다른 `thread_id`로 실행해서 맥락이 끊기는지 확인
 
 ---
 
-## 🎯 전체 워크플로우 요약 (복습용)
+## 전체 워크플로우 요약 (복습용)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -561,7 +561,7 @@ graph.stream(followup_state, config)  # 이전 대화 맥락 유지
 
 ---
 
-## 📊 적용된 기술 체크리스트
+## 적용된 기술 체크리스트
 
 | 기술 | 모듈 | 핵심 개념 |
 |------|------|----------|
@@ -575,20 +575,20 @@ graph.stream(followup_state, config)  # 이전 대화 맥락 유지
 
 ---
 
-## 🚀 강의 팁
+## 강의 팁
 
-### ✅ 실습 중심 접근
+### 실습 중심 접근
 - 각 모듈을 설명한 후 즉시 코드 수정 실습
 - 작은 변경 → 실행 → 결과 확인 사이클 반복
 
-### ✅ 디버깅 가이드
+### 디버깅 가이드
 ```python
 # 각 노드의 출력 확인
 for step in graph.stream(initial_state, config):
     print(f"Step: {step}")  # 노드별 출력 확인
 ```
 
-### ✅ 흔한 오류 및 해결
+### 흔한 오류 및 해결
 1. **UPSTAGE_API_KEY 오류**
    - → `.env` 파일 확인
 2. **FAISS 초기화 실패**
@@ -596,7 +596,7 @@ for step in graph.stream(initial_state, config):
 3. **도구 호출 실패**
    - → `try/except`로 처리됨, 오류 메시지 확인
 
-### ✅ 확장 아이디어 (학생 프로젝트)
+### 확장 아이디어 (학생 프로젝트)
 1. 새로운 여행지 추가 (`TRAVEL_KNOWLEDGE_BASE`)
 2. 새로운 도구 추가 (날씨, 환율 등)
 3. 평가 기준 변경 (8점 → 9점)
@@ -604,7 +604,7 @@ for step in graph.stream(initial_state, config):
 
 ---
 
-## 📚 참고 자료
+## 참고 자료
 
 ### 논문
 - **Plan-and-Solve Prompting**: Wang et al., 2023
@@ -617,7 +617,7 @@ for step in graph.stream(initial_state, config):
 
 ---
 
-## ❓ FAQ (자주 묻는 질문)
+## FAQ (자주 묻는 질문)
 
 ### Q1. MemorySaver와 USER_PROFILES의 차이는?
 - **MemorySaver**: 대화 세션(thread_id) 기반, 메시지 히스토리 자동 관리
@@ -639,7 +639,7 @@ for step in graph.stream(initial_state, config):
 
 ---
 
-## 🎓 최종 점검 체크리스트 (강의 후)
+## 최종 점검 체크리스트 (강의 후)
 
 - [ ] 학생들이 `state.py`에서 TypedDict와 Pydantic 차이를 이해했는가?
 - [ ] Plan-and-Solve의 3단계(Plan-Solve-Synthesize)를 설명할 수 있는가?
@@ -650,4 +650,4 @@ for step in graph.stream(initial_state, config):
 
 ---
 
-**🎉 이 가이드를 활용하여 효과적인 에이전트 교육을 진행하세요!**
+**이 가이드를 활용하여 효과적인 에이전트 교육을 진행하세요!**
