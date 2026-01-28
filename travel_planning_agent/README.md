@@ -49,8 +49,13 @@ LangGraph 기반 Plan-and-Solve 여행 계획 AI 에이전트 프로젝트입니
 │   └────────┬────────┘                                           │
 │            │                                                    │
 │            ▼                                                    │
+│   ┌─────────────────────┐                                       │
+│   │ extract_preferences │ ← 사용자 선호도 추출                  │
+│   └────────┬────────────┘                                       │
+│            │                                                    │
+│            ▼                                                    │
 │   ┌─────────────────┐                                           │
-│   │ plan_and_solve  │ ← Plan-and-Solve: Plan 단계              │
+│   │      plan       │ ← Plan-and-Solve: Plan 단계              │
 │   │                 │   실행 계획(plan_steps) 생성               │
 │   └────────┬────────┘                                           │
 │            │  plan_steps 전달                                   │
@@ -166,7 +171,7 @@ travel_planning_agent/
 
 ### 1. Plan-and-Solve 프롬프팅
 
-**적용 위치**: `nodes.py` - `plan_and_solve_node()`, `research_node()`, `synthesize_node()`
+**적용 위치**: `nodes.py` - `plan_node()`, `research_node()`, `synthesize_node()`
 
 Plan-and-Solve는 복잡한 문제를 3단계로 나누어 해결하는 프롬프팅 기법입니다:
 

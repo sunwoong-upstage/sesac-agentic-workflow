@@ -1,20 +1,4 @@
-"""
-여행 계획 에이전트 - 도구(Tool) 정의
-
-이 모듈은 에이전트가 사용할 수 있는 도구들을 정의합니다.
-
-포함된 도구:
-1. search_travel_knowledge: 여행 지식베이스 검색 (RAG - FAISS 벡터 검색)
-2. estimate_budget: 여행 예산 추정
-3. web_search: 실시간 웹 검색 (Serper Google Search API)
-
-핵심 기술:
-- FAISS 벡터 스토어를 활용한 Agentic RAG
-- Serper API를 활용한 실시간 외부 웹 검색
-- Lazy Initialization으로 임포트 실패 방지
-- 키워드 기반 폴백 검색
-- 모든 도구에 try/except 에러 핸들링
-"""
+"""Travel planning agent tools: RAG-based knowledge search, budget estimation, web search."""
 
 import os
 import logging
@@ -23,17 +7,9 @@ from langchain_core.tools import tool
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
-# 로거 설정
 logger = logging.getLogger(__name__)
 
-
-# =============================================================================
-# Mock 데이터베이스
-# =============================================================================
-
-# 여행 지식베이스 (RAG용)
 TRAVEL_KNOWLEDGE_BASE = [
-    # 한국 여행지
     {
         "id": "KR-001",
         "category": "국내여행",
@@ -64,7 +40,6 @@ TRAVEL_KNOWLEDGE_BASE = [
         "title": "서울 여행 가이드",
         "content": "서울은 한국의 수도로, 경복궁, 북촌한옥마을, 명동, 홍대, 이태원, 남산타워가 대표 관광지입니다. 지하철이 매우 편리하여 대중교통만으로 주요 관광지를 모두 방문할 수 있습니다. 한식, 길거리 음식, 다양한 세계 요리를 즐길 수 있으며, 쇼핑과 K-pop 문화 체험도 가능합니다.",
     },
-    # 해외 여행지
     {
         "id": "JP-001",
         "category": "해외여행",
@@ -95,7 +70,6 @@ TRAVEL_KNOWLEDGE_BASE = [
         "title": "파리 여행 가이드",
         "content": "파리는 프랑스의 수도로, 에펠탑, 루브르 박물관, 개선문, 몽마르뜨, 세느강 크루즈가 대표 관광지입니다. 인천에서 약 12시간 소요됩니다. 크루아상, 에스카르고, 와인 등 프랑스 미식의 중심지이며, 패션과 예술의 도시입니다. 봄(4~6월)과 가을(9~10월)이 여행 최적기입니다. 주요 관광지로는 에펠탑, 루브르 박물관, 개선문, 몽마르뜨/사크레쾨르, 노트르담 대성당, 세느강 크루즈가 있습니다. 마레지구 레스토랑, 생제르맹 카페, 몽마르뜨 비스트로가 맛집으로 유명합니다. 샹젤리제 거리, 갤러리 라파예트, 봉 마르셰에서 쇼핑을 즐길 수 있으며, 베르사유 궁전(당일치기), 와인 테이스팅, 세느강 크루즈 디너 등의 체험 활동도 인기입니다.",
     },
-    # 여행 팁
     {
         "id": "TIP-001",
         "category": "여행팁",
@@ -128,8 +102,6 @@ TRAVEL_KNOWLEDGE_BASE = [
     },
 ]
 
-# 예산 데이터 (Mock, 1인 기준, 원화)
-# 각 여행지별로 저/중/고예산 옵션 제공
 BUDGET_DB = {
     "제주도": {
         "options": [
@@ -301,25 +273,11 @@ BUDGET_DB = {
     },
 }
 
-
-# =============================================================================
-# FAISS 벡터 스토어 (Lazy Initialization)
-#
-# 교육용 참고:
-# 벡터 스토어는 처음 검색 요청 시 초기화됩니다 (Lazy Initialization).
-# 모듈 로드 시점이 아닌 첫 사용 시점에 초기화하여:
-# 1. API 키 없이도 다른 도구는 정상 작동
-# 2. 임포트 실패 방지
-# 3. 불필요한 API 호출 비용 절감
-#
-# 프로덕션에서는 벡터 스토어를 사전 구축하고 파일로 저장해두는 것이 일반적입니다.
-# =============================================================================
-
-_vector_store = None  # 모듈 레벨 캐시
+_vector_store = None
 
 
 def _create_knowledge_base_documents() -> list:
-    """여행 지식베이스를 LangChain Document 객체 리스트로 변환합니다."""
+    """Convert travel knowledge base to LangChain Document objects."""
     documents = []
     for item in TRAVEL_KNOWLEDGE_BASE:
         doc = Document(
@@ -335,13 +293,7 @@ def _create_knowledge_base_documents() -> list:
 
 
 def _get_or_initialize_vector_store():
-    """
-    FAISS 벡터 스토어를 반환합니다. 첫 호출 시 초기화.
-
-    초기화 전략:
-    1. UpstageEmbeddings + FAISS 시도
-    2. 실패 시 None 반환 (폴백 검색 사용)
-    """
+    """Initialize FAISS vector store on first call, or return cached instance."""
     global _vector_store
     if _vector_store is not None:
         return _vector_store
@@ -361,7 +313,7 @@ def _get_or_initialize_vector_store():
 
 
 def _keyword_fallback_search(query: str) -> str:
-    """FAISS 실패 시 키워드 기반 폴백 검색"""
+    """Keyword-based fallback search when FAISS fails."""
     query_lower = query.lower()
     for item in TRAVEL_KNOWLEDGE_BASE:
         if any(word in (item["title"] + " " + item["content"]).lower()
@@ -370,33 +322,17 @@ def _keyword_fallback_search(query: str) -> str:
     return "관련 여행 정보를 찾지 못했습니다."
 
 
-# =============================================================================
-# 도구 정의
-# =============================================================================
-
 class TravelSearchInput(BaseModel):
-    """여행 지식 검색 입력 스키마"""
     query: str = Field(description="검색 쿼리 (예: '제주도 여행', '환전 팁')")
 
 
 class WebSearchInput(BaseModel):
-    """웹 검색 입력 스키마"""
     query: str = Field(description="검색할 쿼리 (예: '제주도 맛집 추천 2024', '도쿄 벚꽃 시기')")
 
 
 @tool(args_schema=TravelSearchInput)
 def search_travel_knowledge(query: str) -> str:
-    """
-    여행 관련 지식베이스를 검색합니다. (FAISS 벡터 검색)
-
-    여행지 정보, 여행 팁, 가이드 등을 검색할 때 사용합니다.
-
-    Args:
-        query: 검색 쿼리
-
-    Returns:
-        관련 여행 정보
-    """
+    """Search travel knowledge base using FAISS vector search."""
     logger.info(f"[Tool Call] search_travel_knowledge | query='{query}'")
     try:
         vector_store = _get_or_initialize_vector_store()
@@ -412,13 +348,11 @@ def search_travel_knowledge(query: str) -> str:
         logger.info("벡터 스토어 없음, 키워드 폴백 검색 사용")
         return _keyword_fallback_search(query)
     except Exception as e:
-        # 어떤 오류든 폴백으로 처리
         logger.warning(f"RAG 검색 실패, 키워드 폴백 사용: {e}")
         return _keyword_fallback_search(query)
 
 
 class BudgetInput(BaseModel):
-    """예산 추정 입력 스키마"""
     destination: str = Field(description="여행지 이름 (예: '제주도', '도쿄')")
     duration_days: int = Field(description="여행 기간 (일수)", ge=1)
     user_budget: int | None = Field(default=None, description="사용자 예산 (원, 선택사항)")
@@ -426,24 +360,9 @@ class BudgetInput(BaseModel):
 
 @tool(args_schema=BudgetInput)
 def estimate_budget(destination: str, duration_days: int, user_budget: int | None = None) -> str:
-    """
-    여행 예산을 추정합니다.
-
-    여행 계획 시 예상 경비를 알고 싶을 때 사용합니다.
-    1인 기준 예상 비용을 항목별로 계산하고, 여러 예산 옵션을 제공합니다.
-    사용자 예산이 제공되면, 예산 내에서 가능한 옵션만 제안합니다.
-
-    Args:
-        destination: 여행지 이름
-        duration_days: 여행 기간 (일수)
-        user_budget: 사용자 예산 (원, 선택사항)
-
-    Returns:
-        예산 옵션별 추정 결과
-    """
+    """Estimate travel budget with multiple price tier options."""
     logger.info(f"[Tool Call] estimate_budget | destination='{destination}', duration_days={duration_days}, user_budget={user_budget}")
     try:
-        # 유연한 여행지 매칭 (예: "제주" → "제주도")
         matched_destination = None
         for key in BUDGET_DB.keys():
             if destination in key or key in destination:
@@ -458,8 +377,7 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
         
         if not options:
             return f"'{matched_destination}' 예산 옵션이 없습니다."
-        
-        # 각 옵션의 총 비용 계산
+
         option_totals = []
         for option in options:
             option_name = option["name"]
@@ -469,16 +387,14 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
             for cost_item, daily_cost in option.items():
                 if cost_item == "name":
                     continue
-                
+
                 if "항공" in cost_item or "KTX" in cost_item:
-                    # 교통비(항공/KTX)는 왕복 1회
                     cost = daily_cost
                     breakdown.append(f"    - {cost_item} (왕복): {cost:,}원")
                 else:
-                    # 일수별 비용 계산
                     cost = daily_cost * duration_days
                     breakdown.append(f"    - {cost_item} ({daily_cost:,}원/일 × {duration_days}일): {cost:,}원")
-                
+
                 total += cost
             
             option_totals.append({
@@ -486,14 +402,12 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
                 "total": total,
                 "breakdown": breakdown
             })
-        
-        # 사용자 예산과 비교하여 필터링
+
         if user_budget is not None:
             affordable_options = [opt for opt in option_totals if opt["total"] <= user_budget]
             logger.info(f"예산 비교 완료: {len(affordable_options)}/{len(option_totals)}개 옵션 가능")
-            
+
             if not affordable_options:
-                # 모든 옵션이 예산 초과인 경우
                 result = f"⚠️ {matched_destination} {duration_days}일 여행 (1인 기준)\n\n"
                 result += f"입력하신 예산: {user_budget:,}원\n\n"
                 result += "죄송합니다. 입력하신 예산으로는 가능한 옵션이 없습니다.\n\n"
@@ -503,10 +417,9 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
                 result += f"  [{min_option['name']}] 총 {min_option['total']:,}원\n"
                 result += "\n".join(min_option["breakdown"])
                 result += f"\n\n  부족한 금액: {min_option['total'] - user_budget:,}원"
-                
+
                 return result
             else:
-                # 예산 내 가능한 옵션만 표시
                 result = f"✅ {matched_destination} {duration_days}일 여행 (1인 기준)\n\n"
                 result += f"입력하신 예산: {user_budget:,}원\n\n"
                 result += f"예산 내 가능한 옵션: {len(affordable_options)}개\n\n"
@@ -515,20 +428,19 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
                     result += f"{i}. [{opt['name']}] 총 {opt['total']:,}원 (여유: {user_budget - opt['total']:,}원)\n"
                     result += "\n".join(opt["breakdown"])
                     result += "\n\n"
-                
+
                 return result
         else:
-            # 사용자 예산 미제공 시 모든 옵션 표시
             result = f"💰 {matched_destination} {duration_days}일 여행 예산 옵션 (1인 기준)\n\n"
-            
+
             for i, opt in enumerate(option_totals, 1):
                 result += f"{i}. [{opt['name']}] 총 {opt['total']:,}원\n"
                 result += "\n".join(opt["breakdown"])
                 result += "\n\n"
-            
+
             result += "💡 TIP: 예산을 입력하시면 해당 예산으로 가능한 옵션만 보여드립니다.\n"
             result += "참고: 실제 비용은 시즌, 예약 시기, 개인 소비 습관에 따라 달라질 수 있습니다."
-            
+
             return result
 
     except Exception as e:
@@ -537,18 +449,7 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
 
 @tool(args_schema=WebSearchInput)
 def web_search(query: str) -> str:
-    """
-    Serper API를 사용하여 Google 웹 검색을 수행합니다.
-
-    실시간 여행 정보, 최신 리뷰, 현재 이벤트 등을 검색할 때 사용합니다.
-    내부 지식베이스에 없는 최신 정보가 필요할 때 유용합니다.
-
-    Args:
-        query: 검색 쿼리
-
-    Returns:
-        검색 결과 요약
-    """
+    """Perform Google web search using Serper API for real-time travel information."""
     logger.info(f"[Tool Call] web_search | query='{query}'")
     try:
         api_key = os.getenv("SERPER_API_KEY")
@@ -578,7 +479,6 @@ def web_search(query: str) -> str:
 
         results = []
 
-        # Knowledge Graph (있는 경우)
         knowledge_graph = data.get("knowledgeGraph", {})
         if knowledge_graph:
             knowledge_graph_info = f"[지식 패널] {knowledge_graph.get('title', '')}"
@@ -586,7 +486,6 @@ def web_search(query: str) -> str:
                 knowledge_graph_info += f": {knowledge_graph['description']}"
             results.append(knowledge_graph_info)
 
-        # Organic 검색 결과
         for item in data.get("organic", [])[:5]:
             title = item.get("title", "")
             snippet = item.get("snippet", "")
@@ -610,9 +509,4 @@ def web_search(query: str) -> str:
         return f"웹 검색 처리 중 오류: {e}"
 
 
-# =============================================================================
-# 도구 그룹
-# =============================================================================
-
-# 모든 조사 도구 (research_node에서 LLM에 바인딩)
 RESEARCH_TOOLS = [search_travel_knowledge, estimate_budget, web_search]

@@ -1,17 +1,4 @@
-"""
-여행 계획 에이전트 - 노드 함수 정의
-
-이 모듈은 그래프의 각 노드에서 실행되는 함수들을 정의합니다.
-
-워크플로우 흐름 (Plan-and-Solve 파이프라인):
-1. classify_intent: 문의 유형 분류
-2. plan: Plan 단계 - 실행 계획 수립
-3. research: Solve 단계 - 도구 호출로 정보 수집
-4. synthesize: Synthesize 단계 - 결과 종합하여 응답 생성
-5. evaluate_response: 응답 품질 평가
-6. improve_response: 응답 개선 (필요시)
-7. save_memory: 이중 메모리 저장
-"""
+"""여행 계획 에이전트 - 노드 함수 정의"""
 
 import logging
 from typing import Literal
@@ -20,7 +7,6 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_upstage import ChatUpstage
 from langchain_core.runnables import RunnableConfig
 
-# 로거 설정
 logger = logging.getLogger(__name__)
 
 from agent.state import (
@@ -46,12 +32,8 @@ from agent.tools import (
 )
 
 
-# =============================================================================
-# 상태 헬퍼
-# =============================================================================
-
 def _get_user_input(state: TravelPlanningState) -> str:
-    """상태에서 사용자 입력을 추출합니다."""
+    """상태에서 사용자 입력을 추출"""
     if state.get("user_input"):
         return state["user_input"]
     messages = state.get("messages", [])
@@ -67,10 +49,7 @@ USER_PROFILES: dict[str, dict] = {}
 
 
 def classify_intent_node(state: TravelPlanningState) -> dict:
-    """
-    Structured Output: 의도 분류
-    사용자 문의를 4가지 카테고리로 분류합니다.
-    """
+    """사용자 문의를 4가지 카테고리로 분류"""
     logger.info("[Node] classify_intent 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(IntentClassification)
@@ -78,7 +57,6 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
     query = _get_user_input(state)
     logger.debug(f"사용자 입력: '{query}'")
 
-    # 빈 입력 처리 - 사용자에게 입력 요청
     if not query.strip():
         logger.warning("빈 입력 감지, skip_to_end=True")
         return {
@@ -104,7 +82,6 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
             "messages": [HumanMessage(content=query)],
         }
     except Exception as e:
-        # 분류 실패 시 general_travel로 폴백
         logger.error(f"의도 분류 실패, general_travel로 폴백: {e}")
         return {
             "user_input": query,
@@ -115,21 +92,16 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
 
 
 def extract_preferences_node(state: TravelPlanningState) -> dict:
-    """
-    다중 턴 대화: 선호도 추출 및 누적
-    대화 히스토리에서 여행지, 예산, 기간 등을 추출합니다.
-    """
+    """대화 히스토리에서 여행 선호도를 추출 및 누적"""
     logger.info("[Node] extract_preferences 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(ExtractedPreferences)
-    
-    # 전체 대화 히스토리 가져오기
+
     messages = state.get("messages", [])
     if not messages:
         logger.debug("대화 메시지 없음, 선호도 추출 스킵")
         return {"extracted_preferences": {}}
-    
-    # 추출 프롬프트
+
     extraction_prompt = """당신은 대화에서 여행 선호도를 추출하는 전문가입니다.
 
 아래 대화 내용을 분석하여 사용자가 **명시적으로 언급한** 여행 정보만 추출하세요.
@@ -147,26 +119,25 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
 - "가족 4명이서" → companions: 4
 
 대화 내용을 분석하여 추출하세요."""
-    
+
     try:
         result: ExtractedPreferences = structured_llm.invoke([
             SystemMessage(content=extraction_prompt),
-            *messages  # 전체 대화 히스토리 전달
+            *messages
         ])
-        
-        # 기존 선호도와 병합 (새로운 정보가 우선)
+
         current_prefs = state.get("extracted_preferences", {})
-        new_prefs = result.model_dump(exclude_none=True)  # None 값은 제외
-        
+        new_prefs = result.model_dump(exclude_none=True)
+
         merged_prefs = {**current_prefs, **new_prefs}
         logger.info(f"선호도 추출 완료: {list(new_prefs.keys())}")
         logger.debug(f"누적 선호도: {merged_prefs}")
-        
+
         return {
             "extracted_preferences": merged_prefs,
             "messages": [AIMessage(content=f"[선호도 추출] {list(new_prefs.keys())} 정보 갱신")],
         }
-        
+
     except Exception as e:
         logger.error(f"선호도 추출 실패: {e}")
         return {
@@ -176,10 +147,7 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
 
 
 def plan_node(state: TravelPlanningState) -> dict:
-    """
-    Plan-and-Solve: Plan 단계
-    사용자 요청을 분석하여 실행 계획을 수립합니다.
-    """
+    """사용자 요청을 분석하여 실행 계획을 수립"""
     logger.info("[Node] plan 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(TravelPlan)
@@ -190,7 +158,6 @@ def plan_node(state: TravelPlanningState) -> dict:
     preferences = state.get("extracted_preferences", {})
     logger.debug(f"의도: {intent}, 선호도: {preferences}")
 
-    # 추출된 선호도 정보를 프롬프트에 포함
     prefs_text = "없음"
     if preferences:
         prefs_text = ", ".join(f"{k}: {v}" for k, v in preferences.items() if v is not None)
@@ -202,7 +169,6 @@ def plan_node(state: TravelPlanningState) -> dict:
     )
 
     try:
-        # 전체 대화 히스토리를 포함하여 LLM에 전달
         messages = [SystemMessage(content=prompt)] + state.get("messages", [])
         plan: TravelPlan = structured_llm.invoke(messages)
         plan_text = f"{plan.destination} {plan.duration_days}일 여행 계획"
@@ -214,8 +180,6 @@ def plan_node(state: TravelPlanningState) -> dict:
             "messages": [AIMessage(content=f"[Plan] {plan_text}\n단계: {', '.join(plan.steps)}")],
         }
     except Exception as e:
-        # 폴백: 기본 계획 단계
-        # 구조화된 출력이 실패해도 기본적인 조사는 수행할 수 있도록 합니다
         logger.error(f"계획 생성 실패, 기본 계획 사용: {e}")
         default_steps = ["여행지 정보 검색", "예산 추정", "웹 검색"]
         return {
@@ -227,10 +191,7 @@ def plan_node(state: TravelPlanningState) -> dict:
 
 
 def research_node(state: TravelPlanningState) -> dict:
-    """
-    Plan-and-Solve: Solve 단계
-    plan_steps에 따라 도구를 호출하고 정보를 수집합니다.
-    """
+    """plan_steps에 따라 도구를 호출하고 정보를 수집"""
     logger.info("[Node] research 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
     llm_with_tools = llm.bind_tools(RESEARCH_TOOLS)
@@ -241,28 +202,25 @@ def research_node(state: TravelPlanningState) -> dict:
     tool_results = []
     logger.debug(f"계획 단계: {plan_steps}")
 
-    # plan_steps와 추출된 선호도를 프롬프트에 포함
     from agent.tools import BUDGET_DB
     budget_destinations = ", ".join(BUDGET_DB.keys())
-    
+
     prefs_text = "없음"
     if preferences:
         prefs_text = "\n".join(f"  - {k}: {v}" for k, v in preferences.items() if v is not None)
-    
+
     prompt = RESEARCH_PROMPT.format(
         query=query,
         plan_steps="\n".join(f"- {step}" for step in plan_steps),
         intent=intent,
         budget_destinations=budget_destinations,
     )
-    
+
     prompt += f"\n\n### 추출된 사용자 선호도\n{prefs_text}\n\n도구 호출 시 이 정보를 활용하세요."
 
-    # 전체 대화 히스토리를 포함
     messages = [SystemMessage(content=prompt)] + state.get("messages", [])
     response = llm_with_tools.invoke(messages)
 
-    # LLM이 반환한 tool_calls 실행
     if hasattr(response, 'tool_calls') and response.tool_calls:
         logger.info(f"LLM이 {len(response.tool_calls)}개 도구 호출 요청")
         tool_map = {tool.name: tool for tool in RESEARCH_TOOLS}
@@ -300,10 +258,7 @@ def research_node(state: TravelPlanningState) -> dict:
 
 
 def synthesize_node(state: TravelPlanningState) -> dict:
-    """
-    Plan-and-Solve: Synthesize 단계
-    계획과 조사 결과를 종합하여 최종 응답을 생성합니다.
-    """
+    """계획과 조사 결과를 종합하여 최종 응답을 생성"""
     logger.info("[Node] synthesize 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.5)
 
@@ -329,10 +284,7 @@ def synthesize_node(state: TravelPlanningState) -> dict:
 
 
 def evaluate_response_node(state: TravelPlanningState) -> dict:
-    """
-    Evaluator-Optimizer: 응답 품질 평가
-    7점 미만이면 improve_response_node로 이동합니다.
-    """
+    """응답 품질을 평가하고 개선 필요 여부를 판단"""
     logger.info("[Node] evaluate_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(QualityEvaluation)
@@ -358,7 +310,6 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
             "iteration": state.get("iteration", 0) + 1,
         }
     except Exception as e:
-        # 평가 실패 시 통과 처리
         logger.error(f"평가 실패, 통과 처리: {e}")
         return {
             "quality_score": 7,
@@ -370,10 +321,7 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
 
 
 def improve_response_node(state: TravelPlanningState) -> dict:
-    """
-    Evaluator-Optimizer: 응답 개선
-    평가 피드백을 반영하여 응답을 재생성합니다.
-    """
+    """평가 피드백을 반영하여 응답을 재생성"""
     logger.info("[Node] improve_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
 
@@ -398,16 +346,11 @@ def improve_response_node(state: TravelPlanningState) -> dict:
 
 
 def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict:
-    """
-    이중 메모리: 단기(MemorySaver) + 장기(USER_PROFILES)
-    사용자 선호도와 문의 이력을 저장합니다.
-    """
+    """사용자 선호도와 문의 이력을 저장"""
     logger.info("[Node] save_memory 시작")
-    # config에서 user_id 추출 (ADR-4: user_id는 config으로 전달)
     user_id = config.get("configurable", {}).get("user_id", "anonymous")
     logger.debug(f"사용자 ID: {user_id}")
 
-    # 장기 메모리 초기화 (첫 방문 시)
     if user_id not in USER_PROFILES:
         logger.info(f"신규 사용자 프로필 생성: {user_id}")
         USER_PROFILES[user_id] = {
@@ -417,7 +360,6 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
 
     user_profile = USER_PROFILES[user_id]
 
-    # 문의 이력 추가
     user_profile["query_history"].append({
         "query": _get_user_input(state),
         "intent": state.get("intent", "general_travel"),
@@ -425,7 +367,6 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
     })
     logger.debug(f"문의 이력 추가: 총 {len(user_profile['query_history'])}건")
 
-    # 선호 여행지 업데이트 (extracted_preferences에서 추출)
     extracted_prefs = state.get("extracted_preferences", {})
     destination = extracted_prefs.get("destination")
     if destination and destination not in user_profile["preferred_destinations"]:
@@ -439,9 +380,7 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
 
 
 def should_improve_response(state: TravelPlanningState) -> Literal["improve", "end"]:
-    """
-    품질 기준(7점) 통과 또는 최대 반복 도달 시 "end", 아니면 "improve"
-    """
+    """품질 기준 통과 또는 최대 반복 도달 시 종료"""
     if state.get("evaluation_passed", False):
         return "end"
 
