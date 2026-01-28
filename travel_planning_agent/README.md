@@ -25,7 +25,7 @@ LangGraph 기반 Plan-and-Solve 여행 계획 AI 에이전트 프로젝트입니
 | 의도 분류 | 문의를 4가지 카테고리로 분류 | Structured Output |
 | Plan-and-Solve | 계획 수립 → 조사 → 종합 파이프라인 | Plan-and-Solve Prompting |
 | RAG 검색 | FAISS 벡터 스토어 기반 여행 지식 검색 | Agentic RAG |
-| 도구 호출 | 3개 도구 + 방어적 폴백 전략 | Tool Calling |
+| 도구 호출 | 3개 도구 (RAG, 예산, 웹 검색) | Tool Calling |
 | 이중 메모리 | 단기(대화) + 장기(사용자 프로필) | Memory Management |
 | 품질 평가 | 응답 품질 평가 및 개선 루프 | Evaluator-Optimizer |
 
@@ -57,8 +57,8 @@ LangGraph 기반 Plan-and-Solve 여행 계획 AI 에이전트 프로젝트입니
 │            ▼                                                    │
 │   ┌─────────────────┐                                           │
 │   │    research     │ ← Plan-and-Solve: Solve 단계             │
-│   │                 │   도구 호출 (RAG + 날씨 + 관광지 + 예산)  │
-│   │                 │   폴백: plan_steps 기반 직접 실행          │
+│   │                 │   LLM이 필요한 도구 자율 호출             │
+│   │                 │   (RAG 검색, 예산 추정, 웹 검색)          │
 │   └────────┬────────┘                                           │
 │            │                                                    │
 │            ▼                                                    │
@@ -208,7 +208,7 @@ def search_travel_knowledge(query: str) -> str:
     return _keyword_fallback_search(query)  # 폴백
 ```
 
-### 3. 도구 호출 + 방어적 폴백
+### 3. LLM 도구 호출 (Tool Calling)
 
 **적용 위치**: `nodes.py` - `research_node()`
 
@@ -217,13 +217,10 @@ def research_node(state):
     llm_with_tools = llm.bind_tools(RESEARCH_TOOLS)
     response = llm_with_tools.invoke(messages)
 
+    # LLM이 필요한 도구를 자율적으로 선택하여 호출
     if response.tool_calls:
-        # 전략 1: LLM이 반환한 tool_calls 실행
         for tool_call in response.tool_calls:
             result = tool_map[tool_call["name"]].invoke(tool_call["args"])
-    else:
-        # 전략 2 (폴백): plan_steps 기반으로 직접 도구 실행
-        _execute_tools_from_plan(query, plan_steps)
 ```
 
 ### 4. 이중 메모리 시스템

@@ -6,7 +6,7 @@
 적용된 기술:
 - Plan-and-Solve 프롬프팅 기법
 - FAISS 벡터 스토어 기반 Agentic RAG
-- 도구 호출 (RAG, 예산 추정, 웹 검색 + 방어적 폴백)
+- LLM 도구 호출 (RAG 검색, 예산 추정, 웹 검색)
 - 이중 메모리 시스템 (단기: MemorySaver / 장기: USER_PROFILES)
 - Evaluator-Optimizer 패턴 (응답 품질 평가 및 개선)
 
