@@ -529,6 +529,12 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
         "quality_score": state.get("quality_score", 0),
     })
 
+    # 선호 여행지 업데이트 (extracted_preferences에서 추출)
+    extracted_prefs = state.get("extracted_preferences", {})
+    destination = extracted_prefs.get("destination")
+    if destination and destination not in user_profile["preferred_destinations"]:
+        user_profile["preferred_destinations"].append(destination)
+
     return {
         "user_profile": user_profile,
     }
