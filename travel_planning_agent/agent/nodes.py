@@ -63,41 +63,13 @@ def _get_user_input(state: TravelPlanningState) -> str:
     return ""
 
 
-# =============================================================================
-# 장기 메모리 저장소
-#
-# 교육용 참고:
-# 이 딕셔너리는 프로세스 재시작 시 초기화됩니다.
-# 프로덕션에서는 Redis, MongoDB 등 영속적 저장소를 사용해야 합니다.
-#
-# 구조: { "user_id": { "preferred_destinations": [...], "query_history": [...], ... } }
-# =============================================================================
-
 USER_PROFILES: dict[str, dict] = {}
 
 
-# =============================================================================
-# 1. 의도 분류 노드
-# =============================================================================
-
 def classify_intent_node(state: TravelPlanningState) -> dict:
     """
-    사용자 문의의 의도를 분류합니다.
-
-    구조화된 출력(Structured Output)을 사용하여 LLM이
-    IntentClassification 스키마에 맞는 JSON을 반환하도록 합니다.
-
-    분류 카테고리:
-    - destination_research: 여행지 조사/추천
-    - itinerary_planning: 일정 계획
-    - budget_estimation: 예산 추정
-    - general_travel: 일반 여행 문의
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        분류 결과 딕셔너리 (user_input, intent, messages)
+    Structured Output: 의도 분류
+    사용자 문의를 4가지 카테고리로 분류합니다.
     """
     logger.info("[Node] classify_intent 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
@@ -142,27 +114,10 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
         }
 
 
-# =============================================================================
-# 2. 선호도 추출 노드 (다중 턴 대화 지원)
-#
-# 대화 히스토리 전체를 분석하여 사용자가 언급한 여행 선호도를 추출합니다.
-# 이전 턴에서 추출된 정보와 새로운 정보를 병합하여 누적합니다.
-# =============================================================================
-
 def extract_preferences_node(state: TravelPlanningState) -> dict:
     """
-    대화 히스토리에서 여행 선호도를 추출합니다.
-    
-    다중 턴 대화를 지원하기 위해:
-    - state["messages"]의 전체 대화 내용을 LLM에 전달
-    - 언급된 정보만 추출 (언급 안 된 정보는 None)
-    - 이전에 추출된 정보와 병합
-    
-    Args:
-        state: 현재 상태 (messages 포함)
-    
-    Returns:
-        업데이트된 extracted_preferences
+    다중 턴 대화: 선호도 추출 및 누적
+    대화 히스토리에서 여행지, 예산, 기간 등을 추출합니다.
     """
     logger.info("[Node] extract_preferences 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
@@ -220,32 +175,10 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
         }
 
 
-# =============================================================================
-# 3. Plan-and-Solve 노드 (핵심 기법 - Plan 단계)
-#
-# Plan-and-Solve 프롬프팅 기법:
-# 복잡한 문제를 "계획 수립 → 단계별 실행 → 결과 종합"으로 나누어 해결합니다.
-#
-# 이 노드는 Plan 단계를 담당합니다:
-# - 사용자 요청을 분석하여 필요한 조사 항목을 파악
-# - TravelPlan 스키마로 구조화된 계획 생성
-# - plan_steps를 다음 노드(research_node)에 전달
-#
-# 참고 논문: "Plan-and-Solve Prompting" (Wang et al., 2023)
-# =============================================================================
-
 def plan_node(state: TravelPlanningState) -> dict:
     """
-    Plan-and-Solve 기법의 Plan 단계
-
+    Plan-and-Solve: Plan 단계
     사용자 요청을 분석하여 실행 계획을 수립합니다.
-    생성된 plan_steps는 research_node에서 도구 호출 결정에 사용됩니다.
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        계획 텍스트 및 실행 단계 리스트
     """
     logger.info("[Node] plan 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
@@ -293,24 +226,10 @@ def plan_node(state: TravelPlanningState) -> dict:
         }
 
 
-# =============================================================================
-# 4. 조사 노드 (Plan-and-Solve - Solve 단계)
-# =============================================================================
-
 def research_node(state: TravelPlanningState) -> dict:
     """
-    Plan-and-Solve 기법의 Solve 단계 - 도구 호출
-
-    plan_node에서 생성된 plan_steps를 읽어
-    필요한 도구를 호출하고 정보를 수집합니다.
-    
-    extracted_preferences를 활용하여 적절한 도구를 호출합니다.
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        도구 호출 결과 및 수집된 정보
+    Plan-and-Solve: Solve 단계
+    plan_steps에 따라 도구를 호출하고 정보를 수집합니다.
     """
     logger.info("[Node] research 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
@@ -380,22 +299,10 @@ def research_node(state: TravelPlanningState) -> dict:
     }
 
 
-# =============================================================================
-# 5. 종합 응답 노드 (Plan-and-Solve - Synthesize 단계)
-# =============================================================================
-
 def synthesize_node(state: TravelPlanningState) -> dict:
     """
-    Plan-and-Solve 기법의 Synthesize 단계
-
-    plan (계획) + research (조사 결과)를 종합하여 최종 응답을 생성합니다.
-    모든 수집된 정보를 프롬프트에 포함하여 포괄적인 답변을 만듭니다.
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        최종 응답
+    Plan-and-Solve: Synthesize 단계
+    계획과 조사 결과를 종합하여 최종 응답을 생성합니다.
     """
     logger.info("[Node] synthesize 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.5)
@@ -421,24 +328,10 @@ def synthesize_node(state: TravelPlanningState) -> dict:
     }
 
 
-# =============================================================================
-# 6. 응답 품질 평가 노드 (Evaluator-Optimizer 패턴)
-# =============================================================================
-
 def evaluate_response_node(state: TravelPlanningState) -> dict:
     """
-    생성된 응답의 품질을 평가합니다.
-
-    Evaluator-Optimizer 패턴:
-    - 평가자(Evaluator)가 응답 품질을 점수화
-    - 7점 미만이면 개선자(Optimizer)가 응답을 개선
-    - 최대 반복 횟수까지 루프
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        평가 결과
+    Evaluator-Optimizer: 응답 품질 평가
+    7점 미만이면 improve_response_node로 이동합니다.
     """
     logger.info("[Node] evaluate_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
@@ -476,23 +369,10 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
         }
 
 
-# =============================================================================
-# 7. 응답 개선 노드
-# =============================================================================
-
 def improve_response_node(state: TravelPlanningState) -> dict:
     """
-    평가 피드백을 반영하여 응답을 개선합니다.
-
-    Evaluator-Optimizer 패턴의 Optimizer 역할:
-    - 평가자의 피드백을 입력으로 받아 응답을 재생성
-    - 원본 응답의 좋은 부분은 유지하면서 부족한 부분만 보완
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        개선된 응답
+    Evaluator-Optimizer: 응답 개선
+    평가 피드백을 반영하여 응답을 재생성합니다.
     """
     logger.info("[Node] improve_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
@@ -517,35 +397,10 @@ def improve_response_node(state: TravelPlanningState) -> dict:
     }
 
 
-# =============================================================================
-# 8. 메모리 저장 노드 (이중 메모리 시스템)
-#
-# 이중 메모리 설계:
-#
-# 1. 단기 메모리 (Short-term Memory):
-#    - MemorySaver 체크포인터가 자동으로 대화 상태 저장
-#    - thread_id 기반으로 대화 히스토리 유지
-#    - 같은 thread_id로 호출하면 이전 대화 맥락 유지
-#
-# 2. 장기 메모리 (Long-term Memory):
-#    - USER_PROFILES 딕셔너리에 사용자 선호도 저장
-#    - user_id 기반으로 여행 선호도 누적
-#    - 세션 간에도 사용자 취향 정보 유지
-#
-# 교육용 참고: USER_PROFILES는 프로세스 재시작 시 초기화됩니다.
-# 프로덕션에서는 Redis, MongoDB 등 영속적 저장소를 사용합니다.
-# =============================================================================
-
 def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict:
     """
-    이중 메모리 시스템으로 대화 정보를 저장합니다.
-
-    Args:
-        state: 현재 상태
-        config: LangGraph 실행 설정 (user_id 포함)
-
-    Returns:
-        업데이트된 사용자 프로필
+    이중 메모리: 단기(MemorySaver) + 장기(USER_PROFILES)
+    사용자 선호도와 문의 이력을 저장합니다.
     """
     logger.info("[Node] save_memory 시작")
     # config에서 user_id 추출 (ADR-4: user_id는 config으로 전달)
@@ -583,24 +438,9 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
     }
 
 
-# =============================================================================
-# 라우팅 함수
-# =============================================================================
-
 def should_improve_response(state: TravelPlanningState) -> Literal["improve", "end"]:
     """
-    응답 개선이 필요한지 결정합니다.
-
-    조건:
-    - 품질 기준 통과 → "end" (save_memory로 이동)
-    - 최대 반복 횟수 도달 → "end"
-    - 그 외 → "improve" (improve_response로 이동)
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        "improve" 또는 "end"
+    품질 기준(7점) 통과 또는 최대 반복 도달 시 "end", 아니면 "improve"
     """
     if state.get("evaluation_passed", False):
         return "end"

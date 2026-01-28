@@ -172,19 +172,19 @@ Plan-and-Solve는 복잡한 문제를 3단계로 나누어 해결하는 프롬�
 
 ```python
 # Plan 단계: 실행 계획 수립
-def plan_and_solve_node(state):
+def plan_node(state):
     structured_llm = llm.with_structured_output(TravelPlan)
     plan = structured_llm.invoke([...])
-    return {"plan_steps": plan.steps}  # research_node에 전달
+    return {"plan_steps": plan.steps}
 
 # Solve 단계: 계획에 따라 도구 호출
 def research_node(state):
-    plan_steps = state["plan_steps"]  # Plan 단계에서 받은 계획
-    # plan_steps를 프롬프트에 포함하여 도구 호출
+    plan_steps = state["plan_steps"]
+    llm_with_tools.invoke([SystemMessage(prompt), *messages])
 
 # Synthesize 단계: 결과 종합
 def synthesize_node(state):
-    # plan + research 결과를 종합하여 최종 응답 생성
+    llm.invoke([SystemMessage(prompt), HumanMessage(query)])
 ```
 
 ### 2. FAISS 벡터 스토어 (Agentic RAG)
@@ -292,8 +292,9 @@ class TravelPlanningState(TypedDict):
 ```python
 # 선형 Plan-and-Solve 파이프라인
 builder.add_edge(START, "classify_intent")
-builder.add_edge("classify_intent", "plan_and_solve")
-builder.add_edge("plan_and_solve", "research")
+builder.add_edge("classify_intent", "extract_preferences")
+builder.add_edge("extract_preferences", "plan")
+builder.add_edge("plan", "research")
 builder.add_edge("research", "synthesize")
 builder.add_edge("synthesize", "evaluate_response")
 
@@ -319,9 +320,12 @@ TRAVEL_KNOWLEDGE_BASE.append({
     "content": "여수는..."
 })
 
-WEATHER_DB["여수"] = {"7월": "평균 26°C, ..."}
-ATTRACTIONS_DB["여수"] = {"관광": [...], "맛집": [...]}
-BUDGET_DB["여수"] = {"moderate": {...}}
+BUDGET_DB["여수"] = {
+    "options": [
+        {"name": "저예산", "숙박": 60000, ...},
+        {"name": "중예산", "숙박": 90000, ...},
+    ]
+}
 ```
 
 ### 2. 실제 API 연동
