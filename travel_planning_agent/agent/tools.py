@@ -267,12 +267,19 @@ def estimate_budget(destination: str, duration_days: int) -> str:
         항목별 예산 추정 결과
     """
     try:
-        budget_data = BUDGET_DB.get(destination, {})
-
-        if not budget_data:
+        # 유연한 여행지 매칭 (예: "제주" → "제주도")
+        matched_destination = None
+        for key in BUDGET_DB.keys():
+            if destination in key or key in destination:
+                matched_destination = key
+                break
+        
+        if not matched_destination:
             return f"'{destination}' 예산 정보가 없습니다. 지원 도시: {', '.join(BUDGET_DB.keys())}"
+        
+        budget_data = BUDGET_DB[matched_destination]
 
-        result = f"{destination} {duration_days}일 여행 예산 (1인 기준):\n\n"
+        result = f"{matched_destination} {duration_days}일 여행 예산 (1인 기준):\n\n"
 
         total = 0
         for cost_item, daily_cost in budget_data.items():

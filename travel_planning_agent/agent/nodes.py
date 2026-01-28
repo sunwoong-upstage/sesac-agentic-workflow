@@ -220,10 +220,14 @@ def research_node(state: TravelPlanningState) -> dict:
     tool_results = []
 
     # plan_steps를 프롬프트에 포함하여 LLM에게 도구 호출 요청
+    from agent.tools import BUDGET_DB
+    budget_destinations = ", ".join(BUDGET_DB.keys())
+    
     prompt = RESEARCH_PROMPT.format(
         query=query,
         plan_steps="\n".join(f"- {step}" for step in plan_steps),
         intent=intent,
+        budget_destinations=budget_destinations,
     )
 
     response = llm_with_tools.invoke([

@@ -25,7 +25,7 @@ LangGraph 기반 Plan-and-Solve 여행 계획 AI 에이전트 프로젝트입니
 | 의도 분류 | 문의를 4가지 카테고리로 분류 | Structured Output |
 | Plan-and-Solve | 계획 수립 → 조사 → 종합 파이프라인 | Plan-and-Solve Prompting |
 | RAG 검색 | FAISS 벡터 스토어 기반 여행 지식 검색 | Agentic RAG |
-| 도구 호출 | 4개 도구 + 방어적 폴백 전략 | Tool Calling |
+| 도구 호출 | 3개 도구 + 방어적 폴백 전략 | Tool Calling |
 | 이중 메모리 | 단기(대화) + 장기(사용자 프로필) | Memory Management |
 | 품질 평가 | 응답 품질 평가 및 개선 루프 | Evaluator-Optimizer |
 
@@ -287,9 +287,8 @@ class TravelPlanningState(TypedDict):
 | 도구 | 용도 | 데이터 소스 |
 |------|------|-----------|
 | `search_travel_knowledge` | 여행 지식 검색 (RAG) | FAISS 벡터 스토어 |
-| `get_weather_info` | 월별 날씨 조회 | Mock 데이터 |
-| `search_attractions` | 관광지/맛집 검색 | Mock 데이터 |
 | `estimate_budget` | 여행 예산 추정 | Mock 데이터 |
+| `web_search` | 실시간 웹 검색 | Serper API |
 
 ### graph.py - 그래프 구성
 
