@@ -111,35 +111,28 @@ UPSTAGE_API_KEY=your-api-key-here
 
 ### 3. 실행
 
-#### 방법 1: LangGraph Studio (권장)
+#### LangGraph Studio로 실행 (권장)
 
 ```bash
 langgraph dev
 ```
 
-브라우저에서 `http://localhost:2024`로 자동 접속됩니다.
+브라우저에서 `http://localhost:2024`로 자동 접속되며, 시각화된 워크플로우를 확인할 수 있습니다.
 
-**사용 방법**:
-1. 좌측 상단 "New Thread" 클릭
-2. User input에 원하는 여행 문의 입력
-   - 예: "제주도 3박 4일 여행 계획 세워줘"
-   - 예: "도쿄 예산 얼마나 들까?"
-   - 예: "부산 맛집 추천해줘"
-3. 워크플로우 실행 과정을 실시간으로 확인
-4. 각 노드의 입출력 상태를 시각화하여 확인
+**사용 예시**:
+- "제주도 3박 4일 여행 계획 세워줘"
+- "도쿄 예산 50만원으로 갈 수 있을까?"
+- "부산 맛집 추천해줘"
 
-#### 방법 2: Python 스크립트 실행
+각 노드의 실행 과정, State 변화, Tool Call 정보를 실시간으로 확인할 수 있습니다.
+
+#### Python 스크립트 실행 (데모용)
 
 ```bash
-# 대화형 모드
 uv run python main.py
-
-# 단일 쿼리
-uv run python main.py --query "제주도 3박 4일 여행 계획 세워줘"
-
-# 데모 실행 (다중 턴 대화 시연)
-uv run python main.py --demo
 ```
+
+고정된 2개의 데모 쿼리를 실행하여 멀티턴 대화와 메모리 시스템을 시연합니다.
 
 ---
 

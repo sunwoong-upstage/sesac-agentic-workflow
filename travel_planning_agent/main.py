@@ -11,9 +11,17 @@
 """
 
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 
 def print_section(title: str, char: str = "=", width: int = 60):

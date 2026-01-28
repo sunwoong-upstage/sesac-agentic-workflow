@@ -13,11 +13,15 @@
 7. save_memory: 이중 메모리 저장
 """
 
+import logging
 from typing import Literal
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_upstage import ChatUpstage
 from langchain_core.runnables import RunnableConfig
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 from agent.state import (
     TravelPlanningState,
@@ -95,13 +99,16 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
     Returns:
         분류 결과 딕셔너리 (user_input, intent, messages)
     """
+    logger.info("[Node] classify_intent 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(IntentClassification)
 
     query = _get_user_input(state)
+    logger.debug(f"사용자 입력: '{query}'")
 
     # 빈 입력 처리 - 사용자에게 입력 요청
     if not query.strip():
+        logger.warning("빈 입력 감지, skip_to_end=True")
         return {
             "user_input": "",
             "intent": "general_travel",
@@ -118,6 +125,7 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
 
     try:
         result: IntentClassification = structured_llm.invoke(messages)
+        logger.info(f"의도 분류 결과: {result.intent}")
         return {
             "user_input": query,
             "intent": result.intent,
@@ -125,6 +133,7 @@ def classify_intent_node(state: TravelPlanningState) -> dict:
         }
     except Exception as e:
         # 분류 실패 시 general_travel로 폴백
+        logger.error(f"의도 분류 실패, general_travel로 폴백: {e}")
         return {
             "user_input": query,
             "intent": "general_travel",
@@ -155,12 +164,14 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
     Returns:
         업데이트된 extracted_preferences
     """
+    logger.info("[Node] extract_preferences 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(ExtractedPreferences)
     
     # 전체 대화 히스토리 가져오기
     messages = state.get("messages", [])
     if not messages:
+        logger.debug("대화 메시지 없음, 선호도 추출 스킵")
         return {"extracted_preferences": {}}
     
     # 추출 프롬프트
@@ -193,6 +204,8 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
         new_prefs = result.model_dump(exclude_none=True)  # None 값은 제외
         
         merged_prefs = {**current_prefs, **new_prefs}
+        logger.info(f"선호도 추출 완료: {list(new_prefs.keys())}")
+        logger.debug(f"누적 선호도: {merged_prefs}")
         
         return {
             "extracted_preferences": merged_prefs,
@@ -200,6 +213,7 @@ def extract_preferences_node(state: TravelPlanningState) -> dict:
         }
         
     except Exception as e:
+        logger.error(f"선호도 추출 실패: {e}")
         return {
             "extracted_preferences": state.get("extracted_preferences", {}),
             "error_log": [f"선호도 추출 실패: {e}"],
@@ -233,6 +247,7 @@ def plan_node(state: TravelPlanningState) -> dict:
     Returns:
         계획 텍스트 및 실행 단계 리스트
     """
+    logger.info("[Node] plan 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(TravelPlan)
 
@@ -240,6 +255,7 @@ def plan_node(state: TravelPlanningState) -> dict:
     intent = state.get("intent", "general_travel")
     user_profile = state.get("user_profile", {})
     preferences = state.get("extracted_preferences", {})
+    logger.debug(f"의도: {intent}, 선호도: {preferences}")
 
     # 추출된 선호도 정보를 프롬프트에 포함
     prefs_text = "없음"
@@ -257,6 +273,8 @@ def plan_node(state: TravelPlanningState) -> dict:
         messages = [SystemMessage(content=prompt)] + state.get("messages", [])
         plan: TravelPlan = structured_llm.invoke(messages)
         plan_text = f"{plan.destination} {plan.duration_days}일 여행 계획"
+        logger.info(f"계획 수립 완료: {plan_text}")
+        logger.debug(f"계획 단계: {plan.steps}")
         return {
             "travel_plan": plan_text,
             "plan_steps": plan.steps,
@@ -265,6 +283,7 @@ def plan_node(state: TravelPlanningState) -> dict:
     except Exception as e:
         # 폴백: 기본 계획 단계
         # 구조화된 출력이 실패해도 기본적인 조사는 수행할 수 있도록 합니다
+        logger.error(f"계획 생성 실패, 기본 계획 사용: {e}")
         default_steps = ["여행지 정보 검색", "예산 추정", "웹 검색"]
         return {
             "travel_plan": "기본 여행 조사 계획",
@@ -293,6 +312,7 @@ def research_node(state: TravelPlanningState) -> dict:
     Returns:
         도구 호출 결과 및 수집된 정보
     """
+    logger.info("[Node] research 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
     llm_with_tools = llm.bind_tools(RESEARCH_TOOLS)
     plan_steps = state.get("plan_steps", [])
@@ -300,6 +320,7 @@ def research_node(state: TravelPlanningState) -> dict:
     intent = state.get("intent", "general_travel")
     preferences = state.get("extracted_preferences", {})
     tool_results = []
+    logger.debug(f"계획 단계: {plan_steps}")
 
     # plan_steps와 추출된 선호도를 프롬프트에 포함
     from agent.tools import BUDGET_DB
@@ -324,10 +345,12 @@ def research_node(state: TravelPlanningState) -> dict:
 
     # LLM이 반환한 tool_calls 실행
     if hasattr(response, 'tool_calls') and response.tool_calls:
+        logger.info(f"LLM이 {len(response.tool_calls)}개 도구 호출 요청")
         tool_map = {tool.name: tool for tool in RESEARCH_TOOLS}
         for tool_call in response.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call["args"]
+            logger.info(f"도구 실행 시작: {tool_name} | args={tool_args}")
             if tool_name in tool_map:
                 try:
                     tool_output = tool_map[tool_name].invoke(tool_args)
@@ -336,13 +359,18 @@ def research_node(state: TravelPlanningState) -> dict:
                         "args": tool_args,
                         "result": tool_output,
                     })
+                    logger.debug(f"도구 실행 성공: {tool_name}")
                 except Exception as e:
+                    logger.error(f"도구 실행 실패: {tool_name} - {e}")
                     tool_results.append({
                         "tool": tool_name,
                         "args": tool_args,
                         "result": f"도구 실행 오류: {e}",
                     })
+    else:
+        logger.warning("LLM이 도구 호출을 요청하지 않음")
 
+    logger.info(f"조사 완료: {len(tool_results)}개 도구 실행됨")
     return {
         "tool_results": tool_results,
         "retrieved_context": next((r["result"] for r in tool_results if r["tool"] == "search_travel_knowledge"), ""),
@@ -369,6 +397,7 @@ def synthesize_node(state: TravelPlanningState) -> dict:
     Returns:
         최종 응답
     """
+    logger.info("[Node] synthesize 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.5)
 
     query = state.get("user_input", "")
@@ -385,6 +414,7 @@ def synthesize_node(state: TravelPlanningState) -> dict:
         HumanMessage(content=query)
     ])
 
+    logger.info(f"응답 생성 완료: {len(response.content)}자")
     return {
         "final_response": response.content,
         "messages": [AIMessage(content=response.content)],
@@ -410,6 +440,7 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
     Returns:
         평가 결과
     """
+    logger.info("[Node] evaluate_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.0)
     structured_llm = llm.with_structured_output(QualityEvaluation)
 
@@ -425,6 +456,8 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
             HumanMessage(content=f"평가 대상 응답:\n{response}")
         ])
 
+        logger.info(f"품질 평가 완료: {result.score}/10점, 통과={result.passed}")
+        logger.debug(f"피드백: {result.feedback}")
         return {
             "quality_score": result.score,
             "quality_feedback": result.feedback,
@@ -433,6 +466,7 @@ def evaluate_response_node(state: TravelPlanningState) -> dict:
         }
     except Exception as e:
         # 평가 실패 시 통과 처리
+        logger.error(f"평가 실패, 통과 처리: {e}")
         return {
             "quality_score": 7,
             "quality_feedback": "평가 완료",
@@ -460,12 +494,14 @@ def improve_response_node(state: TravelPlanningState) -> dict:
     Returns:
         개선된 응답
     """
+    logger.info("[Node] improve_response 시작")
     llm = ChatUpstage(model="solar-pro2", temperature=0.3)
 
     query = state.get("user_input", "")
     original_response = state.get("final_response", "")
     feedback = state.get("quality_feedback", "")
     score = state.get("quality_score", 0)
+    logger.debug(f"개선 피드백 (점수={score}): {feedback}")
 
     prompt = RESPONSE_IMPROVEMENT_PROMPT.format(query=query, original_response=original_response, feedback=feedback, score=score)
 
@@ -474,6 +510,7 @@ def improve_response_node(state: TravelPlanningState) -> dict:
         HumanMessage(content="개선된 응답을 작성해주세요.")
     ])
 
+    logger.info(f"응답 개선 완료: {len(response.content)}자")
     return {
         "final_response": response.content,
         "messages": [AIMessage(content=f"[개선됨] {response.content}")],
@@ -510,11 +547,14 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
     Returns:
         업데이트된 사용자 프로필
     """
+    logger.info("[Node] save_memory 시작")
     # config에서 user_id 추출 (ADR-4: user_id는 config으로 전달)
     user_id = config.get("configurable", {}).get("user_id", "anonymous")
+    logger.debug(f"사용자 ID: {user_id}")
 
     # 장기 메모리 초기화 (첫 방문 시)
     if user_id not in USER_PROFILES:
+        logger.info(f"신규 사용자 프로필 생성: {user_id}")
         USER_PROFILES[user_id] = {
             "preferred_destinations": [],
             "query_history": [],
@@ -528,13 +568,16 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
         "intent": state.get("intent", "general_travel"),
         "quality_score": state.get("quality_score", 0),
     })
+    logger.debug(f"문의 이력 추가: 총 {len(user_profile['query_history'])}건")
 
     # 선호 여행지 업데이트 (extracted_preferences에서 추출)
     extracted_prefs = state.get("extracted_preferences", {})
     destination = extracted_prefs.get("destination")
     if destination and destination not in user_profile["preferred_destinations"]:
         user_profile["preferred_destinations"].append(destination)
+        logger.info(f"선호 여행지 추가: {destination}")
 
+    logger.info(f"메모리 저장 완료 | 선호지: {user_profile['preferred_destinations']}, 이력: {len(user_profile['query_history'])}건")
     return {
         "user_profile": user_profile,
     }

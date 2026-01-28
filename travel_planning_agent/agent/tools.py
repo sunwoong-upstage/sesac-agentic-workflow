@@ -17,10 +17,14 @@
 """
 
 import os
+import logging
 import requests
 from langchain_core.tools import tool
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -349,10 +353,10 @@ def _get_or_initialize_vector_store():
         embeddings = UpstageEmbeddings(model="solar-embedding-1-large")
         documents = _create_knowledge_base_documents()
         _vector_store = FAISS.from_documents(documents, embeddings)
-        print("[INFO] FAISS 벡터 스토어 초기화 성공")
+        logger.info("FAISS 벡터 스토어 초기화 성공")
         return _vector_store
     except Exception as e:
-        print(f"[경고] FAISS 초기화 실패, 키워드 검색으로 폴백: {e}")
+        logger.warning(f"FAISS 초기화 실패, 키워드 검색으로 폴백: {e}")
         return None
 
 
@@ -393,18 +397,23 @@ def search_travel_knowledge(query: str) -> str:
     Returns:
         관련 여행 정보
     """
+    logger.info(f"[Tool Call] search_travel_knowledge | query='{query}'")
     try:
         vector_store = _get_or_initialize_vector_store()
         if vector_store is not None:
             docs = vector_store.similarity_search(query, k=3)
-            return "\n\n".join(
+            result = "\n\n".join(
                 f"[{doc.metadata.get('category', '')}] {doc.metadata.get('title', '')}\n{doc.page_content}"
                 for doc in docs
             )
+            logger.debug(f"RAG 검색 완료: {len(docs)}개 문서 검색됨")
+            return result
         # 폴백: 키워드 매칭
+        logger.info("벡터 스토어 없음, 키워드 폴백 검색 사용")
         return _keyword_fallback_search(query)
     except Exception as e:
         # 어떤 오류든 폴백으로 처리
+        logger.warning(f"RAG 검색 실패, 키워드 폴백 사용: {e}")
         return _keyword_fallback_search(query)
 
 
@@ -432,6 +441,7 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
     Returns:
         예산 옵션별 추정 결과
     """
+    logger.info(f"[Tool Call] estimate_budget | destination='{destination}', duration_days={duration_days}, user_budget={user_budget}")
     try:
         # 유연한 여행지 매칭 (예: "제주" → "제주도")
         matched_destination = None
@@ -480,6 +490,7 @@ def estimate_budget(destination: str, duration_days: int, user_budget: int | Non
         # 사용자 예산과 비교하여 필터링
         if user_budget is not None:
             affordable_options = [opt for opt in option_totals if opt["total"] <= user_budget]
+            logger.info(f"예산 비교 완료: {len(affordable_options)}/{len(option_totals)}개 옵션 가능")
             
             if not affordable_options:
                 # 모든 옵션이 예산 초과인 경우
@@ -538,9 +549,11 @@ def web_search(query: str) -> str:
     Returns:
         검색 결과 요약
     """
+    logger.info(f"[Tool Call] web_search | query='{query}'")
     try:
         api_key = os.getenv("SERPER_API_KEY")
         if not api_key:
+            logger.warning("Serper API 키 미설정")
             return "웹 검색을 사용할 수 없습니다 (SERPER_API_KEY 미설정). 내부 지식베이스를 활용해주세요."
 
         headers = {
@@ -580,15 +593,20 @@ def web_search(query: str) -> str:
             results.append(f"- {title}: {snippet}")
 
         if not results:
+            logger.info("웹 검색 결과 없음")
             return f"'{query}'에 대한 검색 결과가 없습니다."
 
+        logger.info(f"웹 검색 완료: {len(results)}개 결과")
         return f"웹 검색 결과 ({query}):\n\n" + "\n".join(results)
 
     except requests.exceptions.Timeout:
+        logger.error("웹 검색 타임아웃")
         return f"웹 검색 시간 초과. 내부 지식베이스를 활용해주세요."
     except requests.exceptions.RequestException as e:
+        logger.error(f"웹 검색 요청 오류: {e}")
         return f"웹 검색 중 오류 발생: {e}. 내부 지식베이스를 활용해주세요."
     except Exception as e:
+        logger.error(f"웹 검색 처리 오류: {e}")
         return f"웹 검색 처리 중 오류: {e}"
 
 
