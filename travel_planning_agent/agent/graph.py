@@ -66,10 +66,12 @@ def create_travel_planning_graph(with_memory: bool = True):
     builder.add_edge("save_memory", END)
 
     if with_memory:
+        # Programmatic use: custom InMemoryStore + MemorySaver
         memory = MemorySaver()
         graph = builder.compile(checkpointer=memory, store=user_store)
     else:
-        graph = builder.compile(store=user_store)
+        # LangGraph Studio use: platform handles persistence automatically
+        graph = builder.compile()
 
     return graph
 

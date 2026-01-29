@@ -29,6 +29,8 @@ START
   ↓
 [classify_intent] ──(skip_to_end?)──→ [save_memory] → END
   ↓ (continue)
+[extract_preferences]
+  ↓
 [plan]
   ↓
 [research]
@@ -48,11 +50,11 @@ END
 
 ---
 
-## Nodes (7 total)
+## Nodes (8 total)
 
 ### 1. classify_intent
 - **Function**: `classify_intent_node()`
-- **File**: `nodes.py:104`
+- **File**: `nodes.py:48`
 - **Purpose**: Classifies user query into 4 categories
   - `destination_research`: 여행지 조사/추천
   - `itinerary_planning`: 일정 계획
@@ -62,17 +64,25 @@ END
 - **LLM calls**: 1 (structured output with `IntentClassification` schema)
 - **Needed**: YES - Entry point, handles empty input
 
-### 2. plan
+### 2. extract_preferences
+- **Function**: `extract_preferences_node()`
+- **File**: `nodes.py:91`
+- **Purpose**: Extracts travel preferences from conversation history
+- **Output**: merged_prefs dict with destination, duration, budget, etc.
+- **LLM calls**: 1 (structured output with `ExtractedPreferences` schema)
+- **Needed**: YES - Accumulates user preferences across turns
+
+### 3. plan
 - **Function**: `plan_node()`
-- **File**: `nodes.py:175`
+- **File**: `nodes.py:146`
 - **Purpose**: Plan-and-Solve "Plan" phase
 - **Output**: Generates execution steps (e.g., `["여행지 정보 검색", "예산 추정", "웹 검색"]`)
 - **LLM calls**: 1 (structured output with `TravelPlan` schema)
 - **Needed**: MAYBE - Could merge with research
 
-### 3. research
+### 4. research
 - **Function**: `research_node()`
-- **File**: `nodes.py:236`
+- **File**: `nodes.py:190`
 - **Purpose**: Plan-and-Solve "Solve" phase
 - **Behavior**:
   1. Binds tools to LLM and sends plan_steps in prompt
@@ -85,35 +95,35 @@ END
 - **LLM calls**: 1
 - **Needed**: YES - Core tool execution
 
-### 4. synthesize
+### 5. synthesize
 - **Function**: `synthesize_node()`
-- **File**: `nodes.py:386`
+- **File**: `nodes.py:257`
 - **Purpose**: Plan-and-Solve "Synthesize" phase
 - **Input**: Combines travel_plan, retrieved_context, budget_info, web_search_info
 - **Output**: Final response to user
 - **LLM calls**: 1
 - **Needed**: YES - Generates final answer
 
-### 5. evaluate_response
+### 6. evaluate_response
 - **Function**: `evaluate_response_node()`
-- **File**: `nodes.py:425`
+- **File**: `nodes.py:283`
 - **Purpose**: Evaluator-Optimizer pattern - Evaluator role
 - **Behavior**: Scores response 1-10, passes if ≥7
 - **Output**: `quality_score`, `quality_feedback`, `evaluation_passed`
 - **LLM calls**: 1 (structured output with `QualityEvaluation` schema)
 - **Needed**: MAYBE - Adds quality but extra LLM call
 
-### 6. improve_response
+### 7. improve_response
 - **Function**: `improve_response_node()`
-- **File**: `nodes.py:476`
+- **File**: `nodes.py:320`
 - **Purpose**: Evaluator-Optimizer pattern - Optimizer role
 - **Behavior**: Rewrites response based on evaluation feedback
 - **LLM calls**: 1
 - **Needed**: MAYBE - Only runs if score <7
 
-### 7. save_memory
+### 8. save_memory
 - **Function**: `save_memory_node()`
-- **File**: `nodes.py:379`
+- **File**: `nodes.py:345`
 - **Purpose**: Dual memory system
   - Short-term: MemorySaver (automatic, thread_id based)
   - Long-term: InMemoryStore (user_id based, persists across invocations)
@@ -123,13 +133,14 @@ END
 
 ---
 
-## Edges (10 total)
+## Edges (11 total)
 
 | From | To | Type | Condition | Purpose |
 |------|----|------|-----------|---------|
 | START | classify_intent | Direct | - | Entry point |
-| classify_intent | plan | Conditional | `skip_to_end == False` | Normal flow |
+| classify_intent | extract_preferences | Conditional | `skip_to_end == False` | Normal flow |
 | classify_intent | save_memory | Conditional | `skip_to_end == True` | Empty input bypass |
+| extract_preferences | plan | Direct | - | Preferences → Plan |
 | plan | research | Direct | - | Plan → Solve |
 | research | synthesize | Direct | - | Solve → Synthesize |
 | synthesize | evaluate_response | Direct | - | Response → Quality check |
@@ -149,7 +160,7 @@ END
 - **Purpose**: Bypass full pipeline for empty input
 
 ### should_improve_response()
-- **File**: `nodes.py:574`
+- **File**: `nodes.py:383`
 - **Input**: `state.evaluation_passed`, `state.iteration`, `state.max_iterations`
 - **Returns**: `"improve"` or `"end"`
 - **Purpose**: Control evaluation-improvement loop
@@ -184,9 +195,9 @@ END
 | Scenario | LLM Calls | Nodes Used |
 |----------|-----------|------------|
 | Empty input | 1 | classify_intent → save_memory |
-| Normal (pass on first eval) | 5 | classify → plan → research → synthesize → evaluate → save |
-| Normal (1 improvement) | 7 | ... + improve → evaluate |
-| Normal (max 3 improvements) | 11 | ... + (improve → evaluate) × 3 |
+| Normal (pass on first eval) | 6 | classify → extract_prefs → plan → research → synthesize → evaluate → save |
+| Normal (1 improvement) | 8 | ... + improve → evaluate |
+| Normal (max 3 improvements) | 12 | ... + (improve → evaluate) × 3 |
 
 ---
 

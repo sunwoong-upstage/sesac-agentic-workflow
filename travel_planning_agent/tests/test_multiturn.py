@@ -73,3 +73,65 @@ def test_multiturn_preference_extraction():
     # Response should reference Tokyo (context maintained)
     assert "도쿄" in response3 or "Tokyo" in response3, "Response should reference Tokyo from context"
     assert response3, "Turn 3 should have a response"
+
+
+@pytest.mark.skipif(
+    not os.getenv("UPSTAGE_API_KEY") or os.getenv("UPSTAGE_API_KEY") == "your-upstage-api-key-here",
+    reason="UPSTAGE_API_KEY not set"
+)
+def test_inmemorystore_cross_thread_persistence():
+    """Test that user profile persists across different threads via InMemoryStore.
+
+    This tests the InMemoryStore integration:
+    - Query 1: user_001 asks about 제주도 (thread-A)
+    - Query 2: user_001 asks about 도쿄 (thread-B, different thread!)
+    - Verify: query_history has 2 entries, preferred_destinations accumulated
+    """
+    from agent.graph import run_travel_planning, user_store
+
+    test_user_id = "pytest-store-user"
+
+    # Clear any existing data for this test user
+    try:
+        # Reset by putting empty profile
+        user_store.put(("users",), test_user_id, {
+            "preferred_destinations": [],
+            "query_history": [],
+        })
+    except:
+        pass
+
+    # ========== Query 1: 제주도 (Thread A) ==========
+    result1 = run_travel_planning(
+        query="제주도 2박 3일 여행 추천해줘",
+        thread_id="pytest-thread-A",  # Thread A
+        user_id=test_user_id
+    )
+
+    profile1 = result1.get("user_profile", {})
+    assert len(profile1.get("query_history", [])) == 1, "Query 1 should have 1 history entry"
+    assert result1.get("final_response"), "Query 1 should have a response"
+
+    # ========== Query 2: 도쿄 (Thread B - DIFFERENT thread) ==========
+    result2 = run_travel_planning(
+        query="도쿄 예산 알려줘",
+        thread_id="pytest-thread-B",  # Thread B (different!)
+        user_id=test_user_id          # Same user
+    )
+
+    profile2 = result2.get("user_profile", {})
+    history = profile2.get("query_history", [])
+    destinations = profile2.get("preferred_destinations", [])
+
+    # ========== Verify InMemoryStore Persistence ==========
+    assert len(history) == 2, f"Expected 2 history entries (cross-thread), got {len(history)}"
+    assert result2.get("final_response"), "Query 2 should have a response"
+
+    # Check that both queries are in history
+    queries = [h.get("query", "") for h in history]
+    assert any("제주" in q for q in queries), "History should contain 제주도 query"
+    assert any("도쿄" in q for q in queries), "History should contain 도쿄 query"
+
+    print(f"\n✅ InMemoryStore Test Passed!")
+    print(f"   - Query history count: {len(history)}")
+    print(f"   - Preferred destinations: {destinations}")

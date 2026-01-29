@@ -234,16 +234,28 @@ def research_node(state):
 
 ```python
 # 단기 메모리: MemorySaver 체크포인터 (자동)
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.store.memory import InMemoryStore
+
 memory = MemorySaver()
-graph = builder.compile(checkpointer=memory)
-config = {"configurable": {"thread_id": "user-123"}}
+user_store = InMemoryStore()
+graph = builder.compile(checkpointer=memory, store=user_store)
+config = {"configurable": {"thread_id": "user-123", "user_id": "profile-123"}}
 
-# 장기 메모리: USER_PROFILES 딕셔너리 (수동)
-USER_PROFILES = {}  # {user_id: {preferred_destinations, query_history, ...}}
+# 장기 메모리: InMemoryStore (사용자 프로필)
+def run_travel_planning(query, thread_id, user_id):
+    # 호출 전: 기존 프로필 로드
+    existing_profile = user_store.get(("users",), user_id)
 
-def save_memory_node(state, config):
-    user_id = config["configurable"]["user_id"]
-    USER_PROFILES[user_id]["query_history"].append(...)
+    # 그래프 실행
+    result = graph.invoke(
+        {"messages": [HumanMessage(query)]},
+        config={"configurable": {"thread_id": thread_id, "user_id": user_id}}
+    )
+
+    # 호출 후: 업데이트된 프로필 저장
+    user_store.put(("users",), user_id, result["user_profile"])
+    return result
 ```
 
 ### 5. Evaluator-Optimizer 패턴
