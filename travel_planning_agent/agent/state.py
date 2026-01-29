@@ -5,6 +5,13 @@ from typing import Annotated, List, Literal
 from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
+from dataclasses import dataclass
+
+
+@dataclass
+class TravelContext:
+    """Runtime context for travel planning agent"""
+    user_id: str = "anonymous"
 
 
 class TravelPlanningState(TypedDict):

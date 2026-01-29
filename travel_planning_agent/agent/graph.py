@@ -6,10 +6,11 @@ Plan-and-Solve 파이프라인: classify_intent -> extract_preferences -> plan -
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.store.memory import InMemoryStore
 
 from typing import Literal
 
-from agent.state import TravelPlanningState, create_initial_state
+from agent.state import TravelPlanningState, create_initial_state, TravelContext
 from agent.nodes import (
     classify_intent_node,
     extract_preferences_node,
@@ -20,8 +21,10 @@ from agent.nodes import (
     improve_response_node,
     save_memory_node,
     should_improve_response,
-    USER_PROFILES,
 )
+
+# Module-level store for user profile persistence (survives between invocations)
+user_store = InMemoryStore()
 
 
 def create_travel_planning_graph(with_memory: bool = True):
@@ -38,6 +41,7 @@ def create_travel_planning_graph(with_memory: bool = True):
     builder.add_node("save_memory", save_memory_node)
 
     builder.add_edge(START, "classify_intent")
+
     builder.add_conditional_edges(
         "classify_intent",
         lambda s: "skip" if s.get("skip_to_end") else "continue",
@@ -63,9 +67,9 @@ def create_travel_planning_graph(with_memory: bool = True):
 
     if with_memory:
         memory = MemorySaver()
-        graph = builder.compile(checkpointer=memory)
+        graph = builder.compile(checkpointer=memory, store=user_store)
     else:
-        graph = builder.compile()
+        graph = builder.compile(store=user_store)
 
     return graph
 
@@ -91,11 +95,17 @@ def run_travel_planning(
         max_iterations=3,
     )
 
-    if user_id in USER_PROFILES:
-        initial_state["user_profile"] = USER_PROFILES[user_id]
+    # Load existing profile from store if available
+    existing_profile = user_store.get(("users",), user_id)
+    if existing_profile:
+        initial_state["user_profile"] = existing_profile.value
 
     config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
     result = graph.invoke(initial_state, config)
+
+    # Save updated profile back to store
+    if result.get("user_profile"):
+        user_store.put(("users",), user_id, result["user_profile"])
 
     return result
 

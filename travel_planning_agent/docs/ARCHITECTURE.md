@@ -113,13 +113,13 @@ END
 
 ### 7. save_memory
 - **Function**: `save_memory_node()`
-- **File**: `nodes.py:529`
+- **File**: `nodes.py:379`
 - **Purpose**: Dual memory system
   - Short-term: MemorySaver (automatic, thread_id based)
-  - Long-term: USER_PROFILES dict (user_id based)
-- **Saves**: preferred_destinations, travel_styles, query_history
+  - Long-term: InMemoryStore (user_id based, persists across invocations)
+- **Saves**: preferred_destinations, query_history
 - **LLM calls**: 0
-- **Needed**: YES - Demonstrates memory system
+- **Needed**: YES - Demonstrates memory system with LangGraph Store API
 
 ---
 
@@ -164,7 +164,7 @@ END
 | **Plan-and-Solve** | plan → research → synthesize | Decompose complex task into phases |
 | **Tool Calling + Fallback** | research | LLM decides tools; fallback if unsupported |
 | **Evaluator-Optimizer** | evaluate ↔ improve loop | Self-improvement with quality gate |
-| **Dual Memory** | save_memory + MemorySaver | Short-term (thread) + Long-term (user) |
+| **Dual Memory** | save_memory + MemorySaver + InMemoryStore | Short-term (thread) + Long-term (user via Store API) |
 | **Conditional Routing** | skip_to_end, should_improve | Dynamic graph flow based on state |
 
 ---
@@ -245,6 +245,7 @@ class TravelPlanningState(TypedDict):
 
     # Memory
     user_profile: dict
+    extracted_preferences: dict  # Preferences extracted from conversation
 
     # Pipeline Control
     skip_to_end: bool
@@ -252,6 +253,28 @@ class TravelPlanningState(TypedDict):
     # Errors
     error_log: Annotated[List[str], operator.add]
 ```
+
+## Memory Architecture
+
+### Short-term Memory (Checkpointer)
+- **Component**: `MemorySaver` from `langgraph.checkpoint.memory`
+- **Scope**: Per-thread conversation state
+- **Persistence**: In-memory, lost on process restart
+- **Access**: Automatic via `thread_id` in config
+
+### Long-term Memory (Store)
+- **Component**: `InMemoryStore` from `langgraph.store.memory`
+- **Scope**: Cross-thread user profiles
+- **Persistence**: In-memory, survives across `run_travel_planning()` calls within same process
+- **Access**:
+  - Load: `user_store.get(("users",), user_id)` before graph invocation
+  - Save: `user_store.put(("users",), user_id, profile)` after graph invocation
+- **Upgrade path**: Replace with `PostgresStore` for true persistence
+
+### TravelContext (Runtime Context)
+- **Location**: `state.py`
+- **Purpose**: Dataclass for passing runtime context (prepared for future use)
+- **Fields**: `user_id: str = "anonymous"`
 
 ## Pydantic Schemas (Simplified)
 

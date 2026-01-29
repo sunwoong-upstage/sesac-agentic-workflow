@@ -7,7 +7,7 @@
 - Plan-and-Solve 프롬프팅 기법
 - FAISS 벡터 스토어 기반 Agentic RAG
 - LLM 도구 호출 (RAG 검색, 예산 추정, 웹 검색)
-- 이중 메모리 시스템 (단기: MemorySaver / 장기: USER_PROFILES)
+- 이중 메모리 시스템 (단기: MemorySaver / 장기: InMemoryStore)
 - Evaluator-Optimizer 패턴 (응답 품질 평가 및 개선)
 
 사용 예시:
@@ -27,6 +27,7 @@ from agent.state import (
     TravelPlan,
     QualityEvaluation,
     ExtractedPreferences,
+    TravelContext,
 )
 from agent.graph import (
     create_travel_planning_graph,
@@ -47,6 +48,7 @@ __all__ = [
     "TravelPlan",
     "QualityEvaluation",
     "ExtractedPreferences",
+    "TravelContext",
     # Graph
     "create_travel_planning_graph",
     "run_travel_planning",

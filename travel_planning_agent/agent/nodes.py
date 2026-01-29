@@ -45,9 +45,6 @@ def _get_user_input(state: TravelPlanningState) -> str:
     return ""
 
 
-USER_PROFILES: dict[str, dict] = {}
-
-
 def classify_intent_node(state: TravelPlanningState) -> dict:
     """사용자 문의를 4가지 카테고리로 분류"""
     logger.info("[Node] classify_intent 시작")
@@ -346,20 +343,25 @@ def improve_response_node(state: TravelPlanningState) -> dict:
 
 
 def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict:
-    """사용자 선호도와 문의 이력을 저장"""
+    """사용자 선호도와 문의 이력을 저장
+
+    Note: InMemoryStore를 통한 영구 저장은 graph.py에서 처리됩니다.
+    이 노드는 현재 세션의 user_profile 상태를 업데이트합니다.
+    """
     logger.info("[Node] save_memory 시작")
     user_id = config.get("configurable", {}).get("user_id", "anonymous")
     logger.debug(f"사용자 ID: {user_id}")
 
-    if user_id not in USER_PROFILES:
+    # Get current profile from state or initialize new one
+    user_profile = state.get("user_profile", {})
+    if not user_profile:
         logger.info(f"신규 사용자 프로필 생성: {user_id}")
-        USER_PROFILES[user_id] = {
+        user_profile = {
             "preferred_destinations": [],
             "query_history": [],
         }
 
-    user_profile = USER_PROFILES[user_id]
-
+    # Add query to history
     user_profile["query_history"].append({
         "query": _get_user_input(state),
         "intent": state.get("intent", "general_travel"),
@@ -367,6 +369,7 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
     })
     logger.debug(f"문의 이력 추가: 총 {len(user_profile['query_history'])}건")
 
+    # Add destination if extracted
     extracted_prefs = state.get("extracted_preferences", {})
     destination = extracted_prefs.get("destination")
     if destination and destination not in user_profile["preferred_destinations"]:
@@ -374,9 +377,7 @@ def save_memory_node(state: TravelPlanningState, config: RunnableConfig) -> dict
         logger.info(f"선호 여행지 추가: {destination}")
 
     logger.info(f"메모리 저장 완료 | 선호지: {user_profile['preferred_destinations']}, 이력: {len(user_profile['query_history'])}건")
-    return {
-        "user_profile": user_profile,
-    }
+    return {"user_profile": user_profile}
 
 
 def should_improve_response(state: TravelPlanningState) -> Literal["improve", "end"]:
