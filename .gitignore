@@ -44,3 +44,8 @@ Thumbs.db
 # Project specific
 simple_agent_project/
 Practice*.ipynb
+
+# Design Documents (educational/planning materials)
+AI*.pdf
+AI_서비스_기획_*.md
+travel_planning_agent/docs/AI_SERVICE_DESIGN_EXAMPLE*.md
