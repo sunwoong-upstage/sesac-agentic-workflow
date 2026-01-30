@@ -7,10 +7,11 @@ LangGraph 기반 Plan-and-Solve 여행 계획 AI 에이전트 프로젝트입니
 1. [프로젝트 개요](#프로젝트-개요)
 2. [워크플로우 구조](#워크플로우-구조)
 3. [설치 및 실행](#설치-및-실행)
-4. [프로젝트 구조](#프로젝트-구조)
-5. [적용된 기술](#적용된-기술)
-6. [모듈 상세 설명](#모듈-상세-설명)
-7. [확장 방법](#확장-방법)
+4. [평가 (Evaluation)](#평가-evaluation)
+5. [프로젝트 구조](#프로젝트-구조)
+6. [적용된 기술](#적용된-기술)
+7. [모듈 상세 설명](#모듈-상세-설명)
+8. [확장 방법](#확장-방법)
 
 ---
 
@@ -141,6 +142,49 @@ uv run python main.py
 
 ---
 
+## 평가 (Evaluation)
+
+LangSmith를 사용한 에이전트 품질 평가 프레임워크입니다.
+
+### 평가 실행
+
+```bash
+python -m evaluate.run
+```
+
+### 평가 데이터셋 (20개 예제)
+
+| 카테고리 | 예제 수 | 예시 질문 |
+|----------|---------|-----------|
+| Budget Estimation | 5 | "제주도 3박4일 예산은?", "도쿄 여행 비용 알려줘" |
+| Destination Research | 5 | "제주도 맛집 추천", "교토 벚꽃 명소" |
+| Itinerary Planning | 5 | "부산 2박3일 일정", "파리 1주일 계획" |
+| General Travel | 5 | "여행 준비물", "환전 어디서?" |
+
+### 평가 기준 (LLM-as-Judge)
+
+| 평가자 | 설명 | 기준 |
+|--------|------|------|
+| **Correctness** | 정답과 의미적으로 일치하는지 | 핵심 정보(예산, 장소) 일치 |
+| **Groundedness** | 검색된 문서에 기반하는지 | 환각(hallucination) 없음 |
+| **Concision** | 답변 길이가 적절한지 | 정답의 3배 이하 |
+
+### 평가 결과 예시
+
+```
+Total examples: 20
+Correctness:   90%  ✓ 사실적으로 정확한 답변
+Groundedness:  25%  △ 검색 결과 외 정보 추가 경향
+Concision:      0%  × 상세한 답변 (의도된 동작)
+```
+
+### 평가 결과 확인
+
+평가 완료 후 LangSmith 대시보드에서 상세 결과 확인:
+- https://smith.langchain.com/
+
+---
+
 ## 프로젝트 구조
 
 ```
@@ -151,19 +195,24 @@ travel_planning_agent/
 ├── uv.lock               # 의존성 잠금
 ├── README.md             # 이 문서
 ├── main.py               # 실행 진입점
-├── agent/
+├── agent/                # 에이전트 코드
 │   ├── __init__.py       # 패키지 초기화 및 공개 API
 │   ├── state.py          # 상태 정의 (TypedDict, Pydantic)
 │   ├── prompts.py        # 시스템 프롬프트 (Plan-and-Solve 포함)
 │   ├── tools.py          # 도구 정의 (RAG, 예산, 웹 검색)
 │   ├── nodes.py          # 노드 함수들 (핵심 로직)
 │   └── graph.py          # 워크플로우 그래프 구성
-└── tests/                # (선택) 검증용 테스트 스크립트
-    ├── test_edge_cases.py   # 도구 및 엣지 케이스 검증
-    └── test_multiturn.py    # 다중 턴 대화 검증
+├── evaluate/             # 에이전트 평가 (LangSmith)
+│   ├── dataset.py        # 평가 데이터셋 (20개 Q&A)
+│   ├── evaluators.py     # LLM-as-Judge 평가 함수
+│   └── run.py            # 평가 실행 스크립트
+└── tests/                # 코드 테스트 (pytest)
+    ├── conftest.py       # pytest 설정 (.env 로드)
+    ├── test_edge_cases.py
+    └── test_multiturn.py
 ```
 
-> **참고**: `tests/` 폴더는 코드 검증용으로 선택적입니다. 교육 과정에서 다루지 않으며, 실행 없이 학습 가능합니다.
+> **참고**: `tests/`는 코드 검증, `evaluate/`는 에이전트 품질 평가 용도입니다.
 
 ---
 
