@@ -37,7 +37,7 @@ def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
     Returns:
         bool: 정답 여부
     """
-    llm = ChatUpstage(model="solar-pro")
+    llm = ChatUpstage(model="solar-pro3")
     structured_llm = llm.with_structured_output(CorrectnessGrade)
 
     question = inputs.get("question", "")
@@ -82,7 +82,7 @@ def groundedness(inputs: dict, outputs: dict, reference_outputs: dict = None) ->
     Returns:
         bool: 근거 기반 여부
     """
-    llm = ChatUpstage(model="solar-pro")
+    llm = ChatUpstage(model="solar-pro3")
     structured_llm = llm.with_structured_output(GroundednessGrade)
 
     question = inputs.get("question", "")
