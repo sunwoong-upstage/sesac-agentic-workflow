@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "faiss-cpu>=1.7.0",
     "requests>=2.31.0",
+    "pandas>=3.0.0",
 ]
 
 [build-system]
@@ -28,4 +29,16 @@ packages = ["agent"]
 dev-dependencies = [
     "pytest>=8.0.0",
     "ipython>=8.0.0",
+    "langsmith>=0.2.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "langsmith: marks tests that log to LangSmith (deselect with '-m \"not langsmith\"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
