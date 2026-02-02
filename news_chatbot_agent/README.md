@@ -134,15 +134,15 @@ news_chatbot_agent/
 ├── data/
 │   └── news_archive.json # Mock 뉴스 데이터 (RAG용)
 ├── tests/
-│   ├── test_tools.py     # 도구 단위 테스트
-│   ├── test_nodes.py     # 노드 단위 테스트
-│   ├── test_graph.py     # 그래프 통합 테스트
+│   ├── conftest.py       # pytest 설정 및 픽스처
 │   └── test_multiturn.py # 멀티턴 대화 테스트
 ├── activities/
 │   ├── STUDENT_ACTIVITIES.md         # 학습 활동 (빈칸 채우기)
 │   └── STUDENT_ACTIVITIES_ANSWERS.md # 정답지
-├── scripts/
-│   └── evaluate.py       # LangSmith 평가 스크립트
+├── evaluate/
+│   ├── run.py            # LangSmith 평가 스크립트
+│   ├── evaluators.py     # 평가 함수 정의
+│   └── dataset.py        # 테스트 데이터셋
 ├── main.py               # CLI 진입점
 ├── langgraph.json        # LangGraph Studio 설정
 ├── pyproject.toml        # 프로젝트 의존성
