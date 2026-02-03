@@ -11,9 +11,9 @@
 1. [활동 1: 상태(State) 정의 - 정답](#활동-1-상태state-정의---정답)
 2. [활동 2: 도구(Tool) 정의 - 정답](#활동-2-도구tool-정의---정답)
 3. [활동 3: 감성 분석 도구 추가 - 예시 구현](#활동-3-감성-분석-도구-추가---예시-구현)
-4. [활동 4: 입력 검증 노드 추가 - 예시 구현](#활동-4-입력-검증-노드-추가---예시-구현)
-5. [활동 5: 평가 시스템 개선 - 예시 구현](#활동-5-평가-시스템-개선---예시-구현)
-6. [활동 6: 후속 질문 생성 노드 추가 - 예시 구현](#활동-6-후속-질문-생성-노드-추가---예시-구현)
+4. [활동 4: 후속 질문 생성 노드 추가 - 예시 구현](#활동-4-후속-질문-생성-노드-추가---예시-구현)
+5. [활동 5: 입력 검증 노드 추가 - 예시 구현](#활동-5-입력-검증-노드-추가---예시-구현)
+6. [활동 6: 평가 시스템 개선 - 예시 구현](#활동-6-평가-시스템-개선---예시-구현)
 
 ---
 
@@ -376,286 +376,7 @@ print(analyze_sentiment.invoke({'text': '삼성전자, 2024년 4분기 실적 �
 
 ---
 
-### 활동 4: 입력 검증 노드 추가 - 예시 구현
-
-**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
-
-#### Step 1: state.py에 새 필드 추가
-
-```python
-# agent/state.py
-
-class NewsChatbotState(TypedDict):
-    """뉴스 챗봇 에이전트 상태"""
-    # ... 기존 필드들 ...
-
-    # 입력 검증 (새로 추가)
-    is_valid_input: bool
-    """입력 유효성 검사 결과"""
-
-    validation_message: str
-    """유효성 검사 메시지 (실패 시)"""
-```
-
-#### Step 2: nodes.py에 검증 노드 함수 작성
-
-```python
-# agent/nodes.py
-
-def validate_input_node(state: NewsChatbotState) -> dict:
-    """사용자 입력을 검증합니다.
-
-    검증 규칙:
-    1. 최소 길이: 2자 이상
-    2. 뉴스 관련 키워드 포함 여부
-    3. 금지어 확인 (욕설, 스팸 등)
-
-    Args:
-        state: 현재 상태
-
-    Returns:
-        is_valid_input, validation_message 업데이트
-    """
-    logger.info("[Node] validate_input_node 시작")
-    query = state.get("user_input", "")
-
-    # 규칙 1: 최소 길이 검사
-    if len(query.strip()) < 2:
-        logger.warning(f"[Node] 입력이 너무 짧음: '{query}'")
-        return {
-            "is_valid_input": False,
-            "validation_message": "질문이 너무 짧습니다. 최소 2자 이상 입력해주세요."
-        }
-
-    # 규칙 2: 뉴스 관련 키워드 확인
-    NEWS_KEYWORDS = [
-        "뉴스", "기사", "소식", "속보", "발표", "트렌드", "이슈",
-        "최신", "검색", "알려줘", "알려주세요", "찾아줘", "찾아주세요",
-        # 도메인 키워드
-        "AI", "반도체", "주가", "증시", "경제", "IT", "정치", "사회",
-        "엔비디아", "삼성", "테슬라", "애플", "카카오", "네이버"
-    ]
-
-    query_lower = query.lower()
-    contains_news_keyword = any(keyword.lower() in query_lower for keyword in NEWS_KEYWORDS)
-
-    if not contains_news_keyword:
-        logger.warning(f"[Node] 뉴스 관련 키워드 없음: '{query}'")
-        return {
-            "is_valid_input": False,
-            "validation_message": (
-                "뉴스 검색 챗봇입니다. 뉴스 관련 질문을 입력해주세요.\n"
-                "예: '엔비디아 뉴스 알려줘', '최신 AI 트렌드 검색'"
-            )
-        }
-
-    # 규칙 3: 금지어 확인 (선택 사항)
-    BANNED_WORDS = ["욕설1", "스팸2"]  # 실제로는 더 많은 단어 추가
-    if any(banned in query_lower for banned in BANNED_WORDS):
-        logger.warning(f"[Node] 금지어 감지: '{query}'")
-        return {
-            "is_valid_input": False,
-            "validation_message": "부적절한 단어가 포함되어 있습니다."
-        }
-
-    # 모든 검증 통과
-    logger.info(f"[Node] 입력 검증 통과")
-    return {
-        "is_valid_input": True,
-        "validation_message": ""
-    }
-```
-
-#### Step 3: graph.py 수정
-
-```python
-# agent/graph.py
-
-from agent.nodes import (
-    # ... 기존 import ...
-    validate_input_node,  # 새로 추가
-)
-
-def create_news_chatbot_graph(with_memory: bool = True):
-    """뉴스 챗봇 그래프 생성"""
-    # ... 기존 코드 ...
-
-    # 노드 추가 (맨 앞에)
-    builder.add_node("validate_input", validate_input_node)
-    builder.add_node("classify_intent", classify_intent_node)
-    # ... 나머지 노드들 ...
-
-    # 엣지 수정
-    builder.set_entry_point("validate_input")  # START → validate_input
-
-    # 조건부 엣지: 유효하면 classify로, 아니면 바로 종료
-    builder.add_conditional_edges(
-        "validate_input",
-        lambda s: "valid" if s.get("is_valid_input", True) else "invalid",
-        {
-            "valid": "classify_intent",
-            "invalid": "save_memory"  # 검증 실패 시 바로 종료
-        }
-    )
-
-    # 기존 classify_intent 엣지는 그대로 유지
-    builder.add_conditional_edges(
-        "classify_intent",
-        lambda s: "skip" if s.get("intent") == "general" else "continue",
-        {"continue": "extract_preferences", "skip": "save_memory"}
-    )
-
-    # ... 나머지 엣지들 ...
-```
-
-#### 검증 체크리스트
-
-- [x] 빈 입력 "" → `validation_message` 출력 후 종료
-- [x] "피자 맛집 추천해줘" → 뉴스 관련 아님 안내
-- [x] "엔비디아 뉴스 알려줘" → 정상적으로 파이프라인 진행
-- [x] `main.py` 실행 시 정상 동작
-
----
-
-### 활동 5: 평가 시스템 개선 - 예시 구현
-
-**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/prompts.py`
-
-#### Step 1: state.py - 세분화된 평가 스키마 추가
-
-```python
-# agent/state.py
-
-class DetailedQualityEvaluation(BaseModel):
-    """세분화된 응답 품질 평가 스키마"""
-
-    accuracy_score: int = Field(description="정보 정확성 (1-10)", ge=1, le=10)
-    relevance_score: int = Field(description="질문 관련성 (1-10)", ge=1, le=10)
-    completeness_score: int = Field(description="정보 완성도 (1-10)", ge=1, le=10)
-    readability_score: int = Field(description="가독성/구성 (1-10)", ge=1, le=10)
-
-    overall_score: int = Field(description="종합 점수 (1-10)", ge=1, le=10)
-    weakest_area: Literal["accuracy", "relevance", "completeness", "readability"] = Field(
-        description="가장 약한 영역"
-    )
-    improvement_suggestion: str = Field(description="구체적 개선 제안")
-    passed: bool = Field(description="통과 여부 (종합 점수 7점 이상)")
-
-
-# State에 새 필드 추가
-class NewsChatbotState(TypedDict):
-    # ... 기존 필드들 ...
-
-    # 세분화된 평가 결과 (선택 사항, 기존 quality_score와 병행)
-    detailed_evaluation: Optional[dict]
-```
-
-#### Step 2: prompts.py - 세분화된 평가 프롬프트
-
-```python
-# agent/prompts.py
-
-DETAILED_EVALUATION_PROMPT = """당신은 뉴스 챗봇 응답의 품질을 평가하는 전문가입니다.
-
-사용자 질문:
-{user_input}
-
-챗봇 응답:
-{response}
-
-다음 4가지 기준으로 평가하세요 (각 1-10점):
-
-1. **정확성 (accuracy_score)**
-   - 제공된 정보가 사실인가?
-   - 출처가 명확한가?
-   - 오해의 소지가 없는가?
-
-2. **관련성 (relevance_score)**
-   - 사용자 질문에 직접적으로 답변하는가?
-   - 불필요한 정보가 포함되지 않았는가?
-
-3. **완성도 (completeness_score)**
-   - 질문의 모든 측면을 다루었는가?
-   - 추가 정보가 필요한가?
-
-4. **가독성 (readability_score)**
-   - 문장 구조가 명확한가?
-   - 적절한 포맷팅(마크다운, 리스트 등)을 사용했는가?
-   - 핵심이 잘 전달되는가?
-
-**종합 점수 (overall_score)**: 4가지 점수의 가중 평균
-**가장 약한 영역 (weakest_area)**: 4가지 중 가장 낮은 점수 영역
-**개선 제안 (improvement_suggestion)**: 구체적이고 실행 가능한 제안
-**통과 여부 (passed)**: 종합 점수 7점 이상이면 True
-"""
-```
-
-#### Step 3: nodes.py - 세분화된 평가 노드 구현
-
-```python
-# agent/nodes.py
-
-def evaluate_response_detailed_node(state: NewsChatbotState) -> dict:
-    """세분화된 품질 평가를 수행합니다."""
-    logger.info("[Node] evaluate_response_detailed_node 시작")
-
-    from .prompts import DETAILED_EVALUATION_PROMPT
-    from .state import DetailedQualityEvaluation
-
-    prompt = DETAILED_EVALUATION_PROMPT.format(
-        user_input=state["user_input"],
-        response=state["final_response"],
-    )
-
-    structured_llm = llm.with_structured_output(DetailedQualityEvaluation)
-    result = structured_llm.invoke([SystemMessage(content=prompt)])
-
-    logger.info(
-        f"[Node] 세분화 평가 결과: "
-        f"정확성={result.accuracy_score}, "
-        f"관련성={result.relevance_score}, "
-        f"완성도={result.completeness_score}, "
-        f"가독성={result.readability_score}, "
-        f"종합={result.overall_score} "
-        f"(통과: {result.passed})"
-    )
-    logger.info(f"[Node] 가장 약한 영역: {result.weakest_area}")
-    logger.info(f"[Node] 개선 제안: {result.improvement_suggestion[:100]}...")
-
-    return {
-        "quality_score": result.overall_score,
-        "quality_feedback": result.improvement_suggestion,
-        "evaluation_passed": result.passed,
-        "detailed_evaluation": {
-            "accuracy": result.accuracy_score,
-            "relevance": result.relevance_score,
-            "completeness": result.completeness_score,
-            "readability": result.readability_score,
-            "weakest_area": result.weakest_area,
-        },
-        "iteration": state["iteration"] + 1,
-    }
-```
-
-#### Step 4: graph.py에서 노드 교체 (선택 사항)
-
-```python
-# agent/graph.py
-
-# 기존 evaluate_response_node를 evaluate_response_detailed_node로 교체
-builder.add_node("evaluate", evaluate_response_detailed_node)
-```
-
-#### 검증 체크리스트
-
-- [x] 4가지 점수가 모두 출력됨
-- [x] `weakest_area`가 정확히 식별됨
-- [x] 개선 제안이 구체적임
-- [x] 기존 기능이 깨지지 않음
-
----
-
-### 활동 6: 후속 질문 생성 노드 추가 - 예시 구현
+### 활동 4: 후속 질문 생성 노드 추가 - 예시 구현
 
 **수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
 
@@ -810,6 +531,285 @@ for q in result.get('follow_up_questions', []):
 - [x] "엔비디아 뉴스" 질문 시 후속 질문 3개 생성됨
 - [x] 후속 질문이 원본 주제와 연관성이 있음
 - [x] `main.py` 실행 시 에러 없음
+- [x] 기존 기능이 깨지지 않음
+
+---
+
+### 활동 5: 입력 검증 노드 추가 - 예시 구현
+
+**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
+
+#### Step 1: state.py에 새 필드 추가
+
+```python
+# agent/state.py
+
+class NewsChatbotState(TypedDict):
+    """뉴스 챗봇 에이전트 상태"""
+    # ... 기존 필드들 ...
+
+    # 입력 검증 (새로 추가)
+    is_valid_input: bool
+    """입력 유효성 검사 결과"""
+
+    validation_message: str
+    """유효성 검사 메시지 (실패 시)"""
+```
+
+#### Step 2: nodes.py에 검증 노드 함수 작성
+
+```python
+# agent/nodes.py
+
+def validate_input_node(state: NewsChatbotState) -> dict:
+    """사용자 입력을 검증합니다.
+
+    검증 규칙:
+    1. 최소 길이: 2자 이상
+    2. 뉴스 관련 키워드 포함 여부
+    3. 금지어 확인 (욕설, 스팸 등)
+
+    Args:
+        state: 현재 상태
+
+    Returns:
+        is_valid_input, validation_message 업데이트
+    """
+    logger.info("[Node] validate_input_node 시작")
+    query = state.get("user_input", "")
+
+    # 규칙 1: 최소 길이 검사
+    if len(query.strip()) < 2:
+        logger.warning(f"[Node] 입력이 너무 짧음: '{query}'")
+        return {
+            "is_valid_input": False,
+            "validation_message": "질문이 너무 짧습니다. 최소 2자 이상 입력해주세요."
+        }
+
+    # 규칙 2: 뉴스 관련 키워드 확인
+    NEWS_KEYWORDS = [
+        "뉴스", "기사", "소식", "속보", "발표", "트렌드", "이슈",
+        "최신", "검색", "알려줘", "알려주세요", "찾아줘", "찾아주세요",
+        # 도메인 키워드
+        "AI", "반도체", "주가", "증시", "경제", "IT", "정치", "사회",
+        "엔비디아", "삼성", "테슬라", "애플", "카카오", "네이버"
+    ]
+
+    query_lower = query.lower()
+    contains_news_keyword = any(keyword.lower() in query_lower for keyword in NEWS_KEYWORDS)
+
+    if not contains_news_keyword:
+        logger.warning(f"[Node] 뉴스 관련 키워드 없음: '{query}'")
+        return {
+            "is_valid_input": False,
+            "validation_message": (
+                "뉴스 검색 챗봇입니다. 뉴스 관련 질문을 입력해주세요.\n"
+                "예: '엔비디아 뉴스 알려줘', '최신 AI 트렌드 검색'"
+            )
+        }
+
+    # 규칙 3: 금지어 확인 (선택 사항)
+    BANNED_WORDS = ["욕설1", "스팸2"]  # 실제로는 더 많은 단어 추가
+    if any(banned in query_lower for banned in BANNED_WORDS):
+        logger.warning(f"[Node] 금지어 감지: '{query}'")
+        return {
+            "is_valid_input": False,
+            "validation_message": "부적절한 단어가 포함되어 있습니다."
+        }
+
+    # 모든 검증 통과
+    logger.info(f"[Node] 입력 검증 통과")
+    return {
+        "is_valid_input": True,
+        "validation_message": ""
+    }
+```
+
+#### Step 3: graph.py 수정
+
+```python
+# agent/graph.py
+
+from agent.nodes import (
+    # ... 기존 import ...
+    validate_input_node,  # 새로 추가
+)
+
+def create_news_chatbot_graph(with_memory: bool = True):
+    """뉴스 챗봇 그래프 생성"""
+    # ... 기존 코드 ...
+
+    # 노드 추가 (맨 앞에)
+    builder.add_node("validate_input", validate_input_node)
+    builder.add_node("classify_intent", classify_intent_node)
+    # ... 나머지 노드들 ...
+
+    # 엣지 수정
+    builder.set_entry_point("validate_input")  # START → validate_input
+
+    # 조건부 엣지: 유효하면 classify로, 아니면 바로 종료
+    builder.add_conditional_edges(
+        "validate_input",
+        lambda s: "valid" if s.get("is_valid_input", True) else "invalid",
+        {
+            "valid": "classify_intent",
+            "invalid": "save_memory"  # 검증 실패 시 바로 종료
+        }
+    )
+
+    # 기존 classify_intent 엣지는 그대로 유지
+    builder.add_conditional_edges(
+        "classify_intent",
+        lambda s: "skip" if s.get("intent") == "general" else "continue",
+        {"continue": "extract_preferences", "skip": "save_memory"}
+    )
+
+    # ... 나머지 엣지들 ...
+```
+
+#### 검증 체크리스트
+
+- [x] 빈 입력 "" → `validation_message` 출력 후 종료
+- [x] "피자 맛집 추천해줘" → 뉴스 관련 아님 안내
+- [x] "엔비디아 뉴스 알려줘" → 정상적으로 파이프라인 진행
+- [x] `main.py` 실행 시 정상 동작
+
+---
+
+### 활동 6: 평가 시스템 개선 - 예시 구현
+
+**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/prompts.py`
+
+#### Step 1: state.py - 세분화된 평가 스키마 추가
+
+```python
+# agent/state.py
+
+class DetailedQualityEvaluation(BaseModel):
+    """세분화된 응답 품질 평가 스키마"""
+
+    accuracy_score: int = Field(description="정보 정확성 (1-10)", ge=1, le=10)
+    relevance_score: int = Field(description="질문 관련성 (1-10)", ge=1, le=10)
+    completeness_score: int = Field(description="정보 완성도 (1-10)", ge=1, le=10)
+    readability_score: int = Field(description="가독성/구성 (1-10)", ge=1, le=10)
+
+    overall_score: int = Field(description="종합 점수 (1-10)", ge=1, le=10)
+    weakest_area: Literal["accuracy", "relevance", "completeness", "readability"] = Field(
+        description="가장 약한 영역"
+    )
+    improvement_suggestion: str = Field(description="구체적 개선 제안")
+    passed: bool = Field(description="통과 여부 (종합 점수 7점 이상)")
+
+
+# State에 새 필드 추가
+class NewsChatbotState(TypedDict):
+    # ... 기존 필드들 ...
+
+    # 세분화된 평가 결과 (선택 사항, 기존 quality_score와 병행)
+    detailed_evaluation: Optional[dict]
+```
+
+#### Step 2: prompts.py - 세분화된 평가 프롬프트
+
+```python
+# agent/prompts.py
+
+DETAILED_EVALUATION_PROMPT = """당신은 뉴스 챗봇 응답의 품질을 평가하는 전문가입니다.
+
+사용자 질문:
+{user_input}
+
+챗봇 응답:
+{response}
+
+다음 4가지 기준으로 평가하세요 (각 1-10점):
+
+1. **정확성 (accuracy_score)**
+   - 제공된 정보가 사실인가?
+   - 출처가 명확한가?
+   - 오해의 소지가 없는가?
+
+2. **관련성 (relevance_score)**
+   - 사용자 질문에 직접적으로 답변하는가?
+   - 불필요한 정보가 포함되지 않았는가?
+
+3. **완성도 (completeness_score)**
+   - 질문의 모든 측면을 다루었는가?
+   - 추가 정보가 필요한가?
+
+4. **가독성 (readability_score)**
+   - 문장 구조가 명확한가?
+   - 적절한 포맷팅(마크다운, 리스트 등)을 사용했는가?
+   - 핵심이 잘 전달되는가?
+
+**종합 점수 (overall_score)**: 4가지 점수의 가중 평균
+**가장 약한 영역 (weakest_area)**: 4가지 중 가장 낮은 점수 영역
+**개선 제안 (improvement_suggestion)**: 구체적이고 실행 가능한 제안
+**통과 여부 (passed)**: 종합 점수 7점 이상이면 True
+"""
+```
+
+#### Step 3: nodes.py - 세분화된 평가 노드 구현
+
+```python
+# agent/nodes.py
+
+def evaluate_response_detailed_node(state: NewsChatbotState) -> dict:
+    """세분화된 품질 평가를 수행합니다."""
+    logger.info("[Node] evaluate_response_detailed_node 시작")
+
+    from .prompts import DETAILED_EVALUATION_PROMPT
+    from .state import DetailedQualityEvaluation
+
+    prompt = DETAILED_EVALUATION_PROMPT.format(
+        user_input=state["user_input"],
+        response=state["final_response"],
+    )
+
+    structured_llm = llm.with_structured_output(DetailedQualityEvaluation)
+    result = structured_llm.invoke([SystemMessage(content=prompt)])
+
+    logger.info(
+        f"[Node] 세분화 평가 결과: "
+        f"정확성={result.accuracy_score}, "
+        f"관련성={result.relevance_score}, "
+        f"완성도={result.completeness_score}, "
+        f"가독성={result.readability_score}, "
+        f"종합={result.overall_score} "
+        f"(통과: {result.passed})"
+    )
+    logger.info(f"[Node] 가장 약한 영역: {result.weakest_area}")
+    logger.info(f"[Node] 개선 제안: {result.improvement_suggestion[:100]}...")
+
+    return {
+        "quality_score": result.overall_score,
+        "quality_feedback": result.improvement_suggestion,
+        "evaluation_passed": result.passed,
+        "detailed_evaluation": {
+            "accuracy": result.accuracy_score,
+            "relevance": result.relevance_score,
+            "completeness": result.completeness_score,
+            "readability": result.readability_score,
+            "weakest_area": result.weakest_area,
+        },
+        "iteration": state["iteration"] + 1,
+    }
+```
+
+#### Step 4: graph.py에서 노드 교체 (선택 사항)
+
+```python
+# agent/graph.py
+
+# 기존 evaluate_response_node를 evaluate_response_detailed_node로 교체
+builder.add_node("evaluate", evaluate_response_detailed_node)
+```
+
+#### 검증 체크리스트
+
+- [x] 4가지 점수가 모두 출력됨
+- [x] `weakest_area`가 정확히 식별됨
+- [x] 개선 제안이 구체적임
 - [x] 기존 기능이 깨지지 않음
 
 ---

@@ -11,9 +11,9 @@
 1. [활동 1: 상태(State) 정의 (빈칸 채우기)](#활동-1-상태state-정의-빈칸-채우기)
 2. [활동 2: 도구(Tool) 정의 (빈칸 채우기)](#활동-2-도구tool-정의-빈칸-채우기)
 3. [활동 3: 감성 분석 도구 추가](#활동-3-새-도구-추가---감성-분석)
-4. [활동 4: 입력 검증 노드 추가](#활동-4-새-노드-추가---입력-검증)
-5. [활동 5: 평가 시스템 개선](#활동-5-평가-최적화-루프-개선)
-6. [활동 6: 후속 질문 생성 노드 추가](#활동-6-새-노드-추가---후속-질문-생성)
+4. [활동 4: 후속 질문 생성 노드 추가](#활동-4-새-노드-추가---후속-질문-생성)
+5. [활동 5: 입력 검증 노드 추가](#활동-5-새-노드-추가---입력-검증)
+6. [활동 6: 평가 시스템 개선](#활동-6-평가-최적화-루프-개선)
 7. [제출 체크리스트](#제출-체크리스트)
 
 ---
@@ -311,7 +311,66 @@ TOOLS = [search_news_archive, calculate_date_range, search_recent_news, analyze_
 
 ---
 
-## 활동 4: 새 노드 추가 - 입력 검증
+## 활동 4: 새 노드 추가 - 후속 질문 생성
+
+**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
+
+#### 목표
+
+응답 생성 후 사용자가 이어서 물어볼 만한 후속 질문 3개를 자동 생성합니다.
+LLM의 구조화된 출력(structured output)을 활용하여 대화형 UX를 개선합니다.
+
+#### Step 1: state.py에 스키마와 필드 추가
+
+```python
+class FollowUpQuestions(BaseModel):
+    """후속 질문 생성 스키마"""
+    questions: List[str] = Field(description="후속 질문 리스트 (3개)")
+    reasoning: str = Field(description="질문 생성 근거")
+
+
+class NewsChatbotState(TypedDict):
+    # ... 기존 필드들 ...
+
+    follow_up_questions: List[str]
+    """생성된 후속 질문"""
+```
+
+#### Step 2: nodes.py에 후속 질문 생성 노드 작성
+
+```python
+def generate_follow_up_node(state: NewsChatbotState) -> dict:
+    """후속 질문을 생성합니다."""
+    logger.info("[Node] generate_follow_up 시작")
+
+    # TODO: 구현하세요
+    # 1. 사용자 입력과 최종 응답을 기반으로 프롬프트 작성
+    # 2. LLM에 FollowUpQuestions 스키마로 구조화된 출력 요청
+    # 3. follow_up_questions 필드 반환
+
+    pass  # 구현하세요
+```
+
+#### Step 3: graph.py 수정
+
+```python
+# 노드 추가
+builder.add_node("generate_follow_up", generate_follow_up_node)
+
+# 엣지 수정: save_memory 전에 후속 질문 생성
+# evaluate → (pass) → generate_follow_up → save_memory
+```
+
+#### 검증 체크리스트
+
+- [ ] "엔비디아 뉴스" 질문 시 후속 질문 3개 생성됨
+- [ ] 후속 질문이 원본 주제와 연관성이 있음
+- [ ] `main.py` 실행 시 에러 없음
+- [ ] 기존 기능이 깨지지 않음
+
+---
+
+## 활동 5: 새 노드 추가 - 입력 검증
 
 **수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
 
@@ -380,11 +439,12 @@ builder.add_conditional_edges(
 
 ---
 
-## 활동 5: 평가-최적화 루프 개선
+## 활동 6: 평가-최적화 루프 개선
 
 **수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/prompts.py`
 
 #### 목표
+
 품질 평가를 세분화하여 정확성, 관련성, 완성도, 가독성 각각을 평가합니다.
 
 #### Step 1: state.py - 세분화된 평가 스키마 추가
@@ -416,65 +476,6 @@ def evaluate_response_detailed_node(state: NewsChatbotState) -> dict:
 
 - [ ] 4가지 점수가 모두 출력됨
 - [ ] `weakest_area`가 정확히 식별됨
-- [ ] 기존 기능이 깨지지 않음
-
----
-
-## 활동 6: 새 노드 추가 - 후속 질문 생성
-
-**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
-
-#### 목표
-
-응답 생성 후 사용자가 이어서 물어볼 만한 후속 질문 3개를 자동 생성합니다.
-LLM의 구조화된 출력(structured output)을 활용하여 대화형 UX를 개선합니다.
-
-#### Step 1: state.py에 스키마와 필드 추가
-
-```python
-class FollowUpQuestions(BaseModel):
-    """후속 질문 생성 스키마"""
-    questions: List[str] = Field(description="후속 질문 리스트 (3개)")
-    reasoning: str = Field(description="질문 생성 근거")
-
-
-class NewsChatbotState(TypedDict):
-    # ... 기존 필드들 ...
-
-    follow_up_questions: List[str]
-    """생성된 후속 질문"""
-```
-
-#### Step 2: nodes.py에 후속 질문 생성 노드 작성
-
-```python
-def generate_follow_up_node(state: NewsChatbotState) -> dict:
-    """후속 질문을 생성합니다."""
-    logger.info("[Node] generate_follow_up 시작")
-
-    # TODO: 구현하세요
-    # 1. 사용자 입력과 최종 응답을 기반으로 프롬프트 작성
-    # 2. LLM에 FollowUpQuestions 스키마로 구조화된 출력 요청
-    # 3. follow_up_questions 필드 반환
-
-    pass  # 구현하세요
-```
-
-#### Step 3: graph.py 수정
-
-```python
-# 노드 추가
-builder.add_node("generate_follow_up", generate_follow_up_node)
-
-# 엣지 수정: save_memory 전에 후속 질문 생성
-# evaluate → (pass) → generate_follow_up → save_memory
-```
-
-#### 검증 체크리스트
-
-- [ ] "엔비디아 뉴스" 질문 시 후속 질문 3개 생성됨
-- [ ] 후속 질문이 원본 주제와 연관성이 있음
-- [ ] `main.py` 실행 시 에러 없음
 - [ ] 기존 기능이 깨지지 않음
 
 ---
