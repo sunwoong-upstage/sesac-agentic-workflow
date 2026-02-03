@@ -136,9 +136,6 @@ news_chatbot_agent/
 ├── tests/
 │   ├── conftest.py       # pytest 설정 및 픽스처
 │   └── test_multiturn.py # 멀티턴 대화 테스트
-├── activities/
-│   ├── STUDENT_ACTIVITIES.md         # 학습 활동 (빈칸 채우기)
-│   └── STUDENT_ACTIVITIES_ANSWERS.md # 정답지
 ├── evaluate/
 │   ├── run.py            # LangSmith 평가 스크립트
 │   ├── evaluators.py     # 평가 함수 정의
@@ -239,19 +236,15 @@ def should_improve(state: AgentState) -> str:
 
 이 프로젝트는 교육용으로 설계되었습니다.
 
-### 학습 활동
+### 학습 개념
 
-`activities/STUDENT_ACTIVITIES.md`에서 다음 개념을 실습할 수 있습니다:
+이 프로젝트에서 다음 개념을 학습할 수 있습니다:
 
 1. **State 구조 이해** - TypedDict와 Annotated를 활용한 상태 관리
 2. **도구 스키마 분석** - Pydantic을 활용한 도구 입력 검증
-3. **감성 분석 도구 추가** - 새로운 도구를 구현하고 통합
-4. **입력 검증 강화** - Pydantic Field를 활용한 입력 검증
-5. **평가 기준 개선** - Evaluator 프롬프트 최적화
-
-### 정답 확인
-
-`activities/STUDENT_ACTIVITIES_ANSWERS.md`에서 정답을 확인할 수 있습니다.
+3. **LangGraph 워크플로우** - 8개 노드로 구성된 파이프라인
+4. **Evaluator-Optimizer 패턴** - 품질 평가 및 개선 루프
+5. **RAG 통합** - FAISS + Embeddings 기반 검색
 
 ---
 
