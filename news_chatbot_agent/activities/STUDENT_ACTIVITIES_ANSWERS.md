@@ -1,8 +1,8 @@
 # 뉴스 챗봇 에이전트 학습 활동지 - 정답 및 해설
 
 > **대상:** AI 에이전트 패턴을 배우는 초급 개발자
+>
 > **사전 요구사항:** 기본 Python, Practice01-09 노트북 완료
-> **예상 소요 시간:** 총 4-6시간
 
 ---
 
@@ -13,6 +13,7 @@
 3. [활동 3: 감성 분석 도구 추가 - 예시 구현](#활동-3-감성-분석-도구-추가---예시-구현)
 4. [활동 4: 입력 검증 노드 추가 - 예시 구현](#활동-4-입력-검증-노드-추가---예시-구현)
 5. [활동 5: 평가 시스템 개선 - 예시 구현](#활동-5-평가-시스템-개선---예시-구현)
+6. [활동 6: 후속 질문 생성 노드 추가 - 예시 구현](#활동-6-후속-질문-생성-노드-추가---예시-구현)
 
 ---
 
@@ -654,6 +655,165 @@ builder.add_node("evaluate", evaluate_response_detailed_node)
 
 ---
 
+### 활동 6: 후속 질문 생성 노드 추가 - 예시 구현
+
+**수정할 파일:** `agent/state.py`, `agent/nodes.py`, `agent/graph.py`
+
+#### Step 1: state.py - 스키마와 필드 추가
+
+```python
+# agent/state.py
+
+class FollowUpQuestions(BaseModel):
+    """후속 질문 생성 스키마"""
+    questions: List[str] = Field(description="후속 질문 리스트 (3개)")
+    reasoning: str = Field(description="질문 생성 근거")
+
+
+class NewsChatbotState(TypedDict):
+    # ... 기존 필드들 ...
+
+    follow_up_questions: List[str]
+    """생성된 후속 질문"""
+```
+
+#### Step 2: prompts.py - 후속 질문 생성 프롬프트
+
+```python
+# agent/prompts.py
+
+FOLLOW_UP_PROMPT = """당신은 뉴스 대화의 맥락을 분석하여 후속 질문을 생성하는 전문가입니다.
+
+사용자 질문:
+{user_input}
+
+챗봇 응답:
+{response}
+
+위 대화를 분석하여 사용자가 이어서 궁금해할 만한 후속 질문 3개를 생성하세요.
+
+후속 질문 생성 기준:
+1. 원본 주제와 연관성이 있어야 함
+2. 응답에서 다루지 않은 측면을 탐색
+3. 사용자의 이해를 심화시킬 수 있는 질문
+4. 자연스러운 한국어 질문 형태
+
+예시:
+- "엔비디아의 경쟁사 동향은 어떤가요?"
+- "이번 발표가 주가에 미치는 영향은?"
+- "관련 산업 전망은 어떻게 되나요?"
+"""
+```
+
+#### Step 3: nodes.py - 후속 질문 생성 노드 구현
+
+```python
+# agent/nodes.py
+
+def generate_follow_up_node(state: NewsChatbotState) -> dict:
+    """후속 질문을 생성합니다."""
+    logger.info("[Node] generate_follow_up_node 시작")
+
+    from .prompts import FOLLOW_UP_PROMPT
+    from .state import FollowUpQuestions
+
+    prompt = FOLLOW_UP_PROMPT.format(
+        user_input=state["user_input"],
+        response=state["final_response"],
+    )
+
+    try:
+        structured_llm = llm.with_structured_output(FollowUpQuestions)
+        result = structured_llm.invoke([SystemMessage(content=prompt)])
+
+        logger.info(f"[Node] 후속 질문 생성 완료: {result.questions}")
+        logger.info(f"[Node] 생성 근거: {result.reasoning[:100]}...")
+
+        return {
+            "follow_up_questions": result.questions,
+        }
+
+    except Exception as e:
+        logger.error(f"[Node] 후속 질문 생성 실패: {e}")
+        return {
+            "follow_up_questions": [],
+        }
+```
+
+#### Step 4: graph.py 수정
+
+```python
+# agent/graph.py
+
+from agent.nodes import (
+    # ... 기존 import ...
+    generate_follow_up_node,
+)
+
+def create_news_chatbot_graph(with_memory: bool = True):
+    # ... 기존 코드 ...
+
+    # 노드 추가
+    builder.add_node("generate_follow_up", generate_follow_up_node)
+
+    # 엣지 수정: evaluate에서 pass 시 generate_follow_up으로
+    # 기존: evaluate → save_memory
+    # 변경: evaluate → generate_follow_up → save_memory
+    builder.add_conditional_edges(
+        "evaluate",
+        should_improve_response,
+        {
+            "improve": "improve_response",
+            "end": "generate_follow_up"  # save_memory 대신 generate_follow_up
+        }
+    )
+    builder.add_edge("generate_follow_up", "save_memory")
+```
+
+#### Step 5: main.py에서 후속 질문 출력
+
+```python
+# main.py
+
+result = agent.invoke({"user_input": query})
+
+print(f"응답: {result['final_response']}")
+
+# 후속 질문 출력
+if result.get("follow_up_questions"):
+    print("\n추천 후속 질문:")
+    for i, q in enumerate(result["follow_up_questions"], 1):
+        print(f"  {i}. {q}")
+```
+
+#### 테스트 코드
+
+```python
+# 터미널에서 실행
+python -c "
+from agent.graph import create_news_chatbot_graph
+
+agent = create_news_chatbot_graph()
+result = agent.invoke({'user_input': '엔비디아 최근 뉴스 알려줘'})
+
+print('=== 응답 ===')
+print(result['final_response'][:200])
+
+print('\n=== 후속 질문 ===')
+for q in result.get('follow_up_questions', []):
+    print(f'- {q}')
+"
+```
+
+#### 검증 체크리스트
+
+- [x] "엔비디아 뉴스" 질문 시 후속 질문 3개 생성됨
+- [x] 후속 질문이 원본 주제와 연관성이 있음
+- [x] `main.py` 실행 시 에러 없음
+- [x] 기존 기능이 깨지지 않음
+
+---
+
 ## 추가 학습 팁
 
 ### 디버깅 팁
@@ -732,5 +892,3 @@ with ThreadPoolExecutor(max_workers=3) as executor:
 - [ ] 사용 예시 제공
 
 ---
-
-*최종 수정일: 2026-02-02*
